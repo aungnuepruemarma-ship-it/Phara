@@ -16,6 +16,11 @@ class PipelineContext:
     evidence_summary: str = ""
     hypothesis: AgentOutput | None = None
     saved_hypothesis_id: str | None = None
+    # Phase 4: debate and critique
+    debate_results: list[AgentOutput] = field(default_factory=list)
+    critique: AgentOutput | None = None
+    enable_debate: bool = False
+    enable_critique: bool = False
 
 
 class BaseWorkflowStep(ABC):

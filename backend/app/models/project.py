@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from app.models.paper import Paper
     from app.models.experiment import Experiment
     from app.models.note import Note
+    from app.models.agent_memory import AgentMemory
 
 
 class Project(Base):
@@ -33,3 +34,6 @@ class Project(Base):
         "Experiment", back_populates="project", cascade="all, delete-orphan"
     )
     notes: Mapped[list["Note"]] = relationship("Note", back_populates="project", cascade="all, delete-orphan")
+    agent_memories: Mapped[list["AgentMemory"]] = relationship(
+        "AgentMemory", back_populates="project", cascade="all, delete-orphan"
+    )

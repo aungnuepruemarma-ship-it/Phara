@@ -4,7 +4,7 @@ from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
-from app.schemas.research import WorkflowRequest, WorkflowResult
+from app.schemas.research import DebateEntry, WorkflowRequest, WorkflowResult
 
 # Ensure repo root is importable when running inside the backend container
 _repo_root = str(Path(__file__).resolve().parents[4])
@@ -15,6 +15,8 @@ if _repo_root not in sys.path:
 async def run_research_workflow(request: WorkflowRequest, db: AsyncSession, current_user: User) -> WorkflowResult:
     from workflows.base_step import PipelineContext
     from workflows.pipeline import ResearchPipeline
+    from workflows.steps.critique_step import CritiqueStep
+    from workflows.steps.debate_step import DebateStep
     from workflows.steps.generate_hypothesis import GenerateHypothesisStep
     from workflows.steps.retrieve_papers import RetrievePapersStep
     from workflows.steps.save_experiment import SaveExperimentStep
@@ -26,6 +28,8 @@ async def run_research_workflow(request: WorkflowRequest, db: AsyncSession, curr
             RetrievePapersStep(top_k=settings.retrieval_top_k),
             SummarizeEvidenceStep(),
             GenerateHypothesisStep(),
+            CritiqueStep(),
+            DebateStep(),
             SaveExperimentStep(db=db),
         ]
     )
@@ -36,6 +40,8 @@ async def run_research_workflow(request: WorkflowRequest, db: AsyncSession, curr
         experiment_id=str(request.experiment_id),
         user_id=str(current_user.id),
         agent_name=request.agent_name,
+        enable_critique=request.enable_critique,
+        enable_debate=request.enable_debate,
     )
     ctx = await pipeline.run(ctx)
 
@@ -46,16 +52,36 @@ async def run_research_workflow(request: WorkflowRequest, db: AsyncSession, curr
     result = await db.execute(select(Hypothesis).where(Hypothesis.id == uuid.UUID(ctx.saved_hypothesis_id)))
     hypothesis = result.scalar_one()
 
+    debate_entries = [
+        DebateEntry(
+            role=d.metadata.get("debate_role", "unknown"),
+            hypothesis=d.hypothesis,
+            reasoning=d.reasoning,
+            confidence=d.confidence,
+        )
+        for d in ctx.debate_results
+    ]
+
+    critique_entry = None
+    if ctx.critique is not None:
+        critique_entry = DebateEntry(
+            role="critic",
+            hypothesis=ctx.critique.hypothesis,
+            reasoning=ctx.critique.reasoning,
+            confidence=ctx.critique.confidence,
+        )
+
     return WorkflowResult(
         hypothesis=hypothesis,
         evidence_summary=ctx.evidence_summary,
         retrieved_paper_count=len(ctx.retrieved_paper_ids),
+        debate=debate_entries,
+        critique=critique_entry,
     )
 
 
 async def list_history(db: AsyncSession, current_user: User):
     from sqlalchemy import select
-    from sqlalchemy.orm import joinedload
     from app.models.hypothesis import Hypothesis
     from app.models.experiment import Experiment
     from app.models.project import Project

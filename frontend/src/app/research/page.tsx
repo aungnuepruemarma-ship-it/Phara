@@ -3,14 +3,50 @@ import { useEffect, useState } from "react";
 import AuthGuard from "@/components/layout/AuthGuard";
 import Sidebar from "@/components/layout/Sidebar";
 import api from "@/lib/api";
-import type { Project, Experiment, WorkflowResult } from "@/types";
+import type { Project, Experiment, WorkflowResult, DebateEntry } from "@/types";
 import ReactMarkdown from "react-markdown";
+
+function DebateCard({ entry, label }: { entry: DebateEntry; label: string }) {
+  const [open, setOpen] = useState(false);
+  const roleColor =
+    entry.role === "pro" ? "border-emerald-700 bg-emerald-950/40" :
+    entry.role === "con" ? "border-red-700 bg-red-950/40" :
+    "border-amber-700 bg-amber-950/40";
+  return (
+    <div className={`border rounded-xl p-4 ${roleColor}`}>
+      <div className="flex items-center justify-between">
+        <div>
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</span>
+          <p className="text-slate-200 text-sm mt-1">{entry.hypothesis}</p>
+        </div>
+        <div className="flex items-center gap-3 ml-4 shrink-0">
+          <span className="text-xs text-slate-400">{(entry.confidence * 100).toFixed(0)}%</span>
+          <button onClick={() => setOpen(!open)} className="text-xs text-slate-400 hover:text-white transition-colors">
+            {open ? "hide" : "reasoning"}
+          </button>
+        </div>
+      </div>
+      {open && (
+        <div className="mt-3 pt-3 border-t border-slate-700 prose prose-invert prose-sm max-w-none">
+          <ReactMarkdown>{entry.reasoning}</ReactMarkdown>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ResearchPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [experiments, setExperiments] = useState<Experiment[]>([]);
   const [agents, setAgents] = useState<{ name: string; description: string }[]>([]);
-  const [form, setForm] = useState({ question: "", project_id: "", experiment_id: "", agent_name: "math_research_agent" });
+  const [form, setForm] = useState({
+    question: "",
+    project_id: "",
+    experiment_id: "",
+    agent_name: "math_research_agent",
+    enable_debate: false,
+    enable_critique: false,
+  });
   const [result, setResult] = useState<WorkflowResult | null>(null);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
@@ -88,6 +124,27 @@ export default function ResearchPage() {
               </div>
             </div>
 
+            <div className="flex gap-6">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={form.enable_critique}
+                  onChange={(e) => setForm({ ...form, enable_critique: e.target.checked })}
+                  className="w-4 h-4 accent-primary-500"
+                />
+                <span className="text-sm text-slate-300">Enable Critique</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={form.enable_debate}
+                  onChange={(e) => setForm({ ...form, enable_debate: e.target.checked })}
+                  className="w-4 h-4 accent-primary-500"
+                />
+                <span className="text-sm text-slate-300">Enable Debate</span>
+              </label>
+            </div>
+
             {error && <p className="text-red-400 text-sm">{error}</p>}
 
             <button type="submit" disabled={running} className="bg-primary-600 hover:bg-primary-700 text-white px-6 py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50">
@@ -112,6 +169,28 @@ export default function ResearchPage() {
                 <div className="bg-surface-2 border border-surface-3 rounded-xl p-6">
                   <h2 className="text-lg font-semibold text-white mb-3">Evidence Summary</h2>
                   <p className="text-slate-300 text-sm leading-relaxed">{result.evidence_summary}</p>
+                </div>
+              )}
+
+              {result.critique && (
+                <div className="bg-surface-2 border border-surface-3 rounded-xl p-6">
+                  <h2 className="text-lg font-semibold text-white mb-4">Critique</h2>
+                  <DebateCard entry={result.critique} label="Critic Review" />
+                </div>
+              )}
+
+              {result.debate.length > 0 && (
+                <div className="bg-surface-2 border border-surface-3 rounded-xl p-6">
+                  <h2 className="text-lg font-semibold text-white mb-4">Debate</h2>
+                  <div className="space-y-3">
+                    {result.debate.map((d, i) => (
+                      <DebateCard
+                        key={i}
+                        entry={d}
+                        label={d.role === "pro" ? "For the hypothesis" : "Against the hypothesis"}
+                      />
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

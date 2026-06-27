@@ -66,8 +66,28 @@ export interface Hypothesis {
   created_at: string;
 }
 
+export interface AgentMemory {
+  id: string;
+  project_id: string;
+  agent_name: string;
+  memory_type: string;
+  content: string;
+  source_question: string;
+  tags: string[];
+  created_at: string;
+}
+
+export interface DebateEntry {
+  role: string;
+  hypothesis: string;
+  reasoning: string;
+  confidence: number;
+}
+
 export interface WorkflowResult {
   hypothesis: Hypothesis;
   evidence_summary: string;
   retrieved_paper_count: number;
+  debate: DebateEntry[];
+  critique: DebateEntry | null;
 }
