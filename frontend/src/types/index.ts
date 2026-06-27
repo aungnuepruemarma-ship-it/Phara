@@ -54,6 +54,8 @@ export interface Note {
   updated_at: string;
 }
 
+export type HypothesisReviewStatus = "candidate" | "under_review" | "accepted" | "rejected";
+
 export interface Hypothesis {
   id: string;
   experiment_id: string;
@@ -64,6 +66,10 @@ export interface Hypothesis {
   agent_used: string;
   confidence_score: number | null;
   created_at: string;
+  // Blueprint v1.0: every hypothesis is a candidate until reviewed
+  review_status: HypothesisReviewStatus;
+  review_notes: string | null;
+  reviewed_at: string | null;
 }
 
 export interface AgentMemory {
