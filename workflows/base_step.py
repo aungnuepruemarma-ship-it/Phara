@@ -26,6 +26,8 @@ class ResearchState(TypedDict, total=False):
     mlflow_run_id: str | None
     cross_domain_insights: list[dict]
     kg_entities_created: list[str]
+    enable_evaluation: bool
+    evaluation_score: float | None
 
 
 @dataclass

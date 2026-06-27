@@ -163,3 +163,34 @@ export interface KGAnalogy {
   explanation: string | null;
   confidence: number;
 }
+
+export interface DimensionScore {
+  name: string;
+  score: number;
+  reasoning: string;
+}
+
+export interface BenchmarkScore {
+  name: string;
+  score: number;
+  details: Record<string, unknown>;
+}
+
+export interface EvaluationOut {
+  id: string;
+  hypothesis_id: string;
+  project_id: string;
+  overall_score: number;
+  verdict: "strong" | "moderate" | "weak";
+  dimension_scores: DimensionScore[];
+  benchmark_scores: BenchmarkScore[];
+  created_at: string;
+}
+
+export interface EvaluationSummary {
+  project_id: string;
+  hypothesis_count: number;
+  avg_score: number | null;
+  best_agent: string | null;
+  score_trend: number[];
+}

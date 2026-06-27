@@ -4,7 +4,7 @@ import { useParams } from "next/navigation";
 import AuthGuard from "@/components/layout/AuthGuard";
 import Sidebar from "@/components/layout/Sidebar";
 import api from "@/lib/api";
-import type { Experiment } from "@/types";
+import type { Experiment, EvaluationOut } from "@/types";
 import Link from "next/link";
 import clsx from "clsx";
 
@@ -15,19 +15,62 @@ const statusColor: Record<string, string> = {
   failed: "bg-red-900 text-red-300",
 };
 
+const verdictStyle: Record<string, { bg: string; text: string; label: string }> = {
+  strong:   { bg: "bg-green-900",  text: "text-green-300",  label: "Strong" },
+  moderate: { bg: "bg-yellow-900", text: "text-yellow-300", label: "Moderate" },
+  weak:     { bg: "bg-red-900",    text: "text-red-300",    label: "Weak" },
+};
+
+function QualityBadge({ eval: ev, onEvaluate }: { eval: EvaluationOut | undefined; onEvaluate: () => void }) {
+  if (!ev) {
+    return (
+      <button
+        onClick={(e) => { e.stopPropagation(); onEvaluate(); }}
+        className="text-xs px-2 py-0.5 rounded bg-slate-700 text-slate-400 hover:bg-slate-600 transition-colors ml-2 shrink-0"
+      >
+        Evaluate
+      </button>
+    );
+  }
+  const style = verdictStyle[ev.verdict] ?? verdictStyle.weak;
+  return (
+    <span
+      title={`Overall: ${(ev.overall_score * 100).toFixed(0)}%`}
+      className={clsx("text-xs px-2 py-0.5 rounded ml-2 shrink-0", style.bg, style.text)}
+    >
+      {style.label} · {(ev.overall_score * 100).toFixed(0)}%
+    </span>
+  );
+}
+
 export default function ExperimentsPage() {
   const { id: projectId } = useParams<{ id: string }>();
   const [experiments, setExperiments] = useState<Experiment[]>([]);
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState<Experiment | null>(null);
   const [form, setForm] = useState({ title: "", description: "" });
+  const [evaluations, setEvaluations] = useState<Record<string, EvaluationOut>>({});
+  const [evaluating, setEvaluating] = useState<string | null>(null);
 
   async function load() {
     const r = await api.get(`/projects/${projectId}/experiments`);
     setExperiments(r.data);
   }
 
-  useEffect(() => { load(); }, [projectId]);
+  async function loadEvaluations() {
+    try {
+      const r = await api.get(`/projects/${projectId}/evaluations`);
+      const map: Record<string, EvaluationOut> = {};
+      for (const ev of r.data as EvaluationOut[]) {
+        map[ev.hypothesis_id] = ev;
+      }
+      setEvaluations(map);
+    } catch {
+      // evaluations not yet available — silently ignore
+    }
+  }
+
+  useEffect(() => { load(); loadEvaluations(); }, [projectId]);
 
   async function loadDetail(exp: Experiment) {
     const r = await api.get(`/projects/${projectId}/experiments/${exp.id}`);
@@ -40,6 +83,18 @@ export default function ExperimentsPage() {
     setCreating(false);
     setForm({ title: "", description: "" });
     load();
+  }
+
+  async function handleEvaluate(hypothesisId: string) {
+    setEvaluating(hypothesisId);
+    try {
+      const r = await api.post(`/projects/${projectId}/hypotheses/${hypothesisId}/evaluate`, {});
+      setEvaluations((prev) => ({ ...prev, [hypothesisId]: r.data }));
+    } catch {
+      // ignore
+    } finally {
+      setEvaluating(null);
+    }
   }
 
   return (
@@ -91,8 +146,34 @@ export default function ExperimentsPage() {
                     <div key={h.id} className="bg-surface-3 rounded-lg p-3">
                       <p className="text-xs text-slate-400 mb-1">{h.question}</p>
                       <p className="text-sm text-white">{h.hypothesis_text}</p>
-                      {h.confidence_score !== null && (
-                        <p className="text-xs text-slate-500 mt-1">{(h.confidence_score * 100).toFixed(0)}% confidence</p>
+                      <div className="flex items-center justify-between mt-2">
+                        {h.confidence_score !== null && (
+                          <p className="text-xs text-slate-500">{(h.confidence_score * 100).toFixed(0)}% confidence</p>
+                        )}
+                        {evaluating === h.id ? (
+                          <span className="text-xs text-slate-400 ml-2">Evaluating…</span>
+                        ) : (
+                          <QualityBadge
+                            eval={evaluations[h.id]}
+                            onEvaluate={() => handleEvaluate(h.id)}
+                          />
+                        )}
+                      </div>
+                      {evaluations[h.id] && (
+                        <div className="mt-2 space-y-1">
+                          {evaluations[h.id].dimension_scores.map((d) => (
+                            <div key={d.name} className="flex items-center gap-2">
+                              <span className="text-xs text-slate-500 w-32 truncate">{d.name.replace(/_/g, " ")}</span>
+                              <div className="flex-1 bg-slate-700 rounded-full h-1">
+                                <div
+                                  className="bg-primary-500 h-1 rounded-full"
+                                  style={{ width: `${(d.score * 100).toFixed(0)}%` }}
+                                />
+                              </div>
+                              <span className="text-xs text-slate-400 w-8 text-right">{(d.score * 100).toFixed(0)}%</span>
+                            </div>
+                          ))}
+                        </div>
                       )}
                     </div>
                   ))}

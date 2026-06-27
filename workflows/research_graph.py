@@ -41,6 +41,9 @@ class ResearchState(TypedDict, total=False):
     # Sprint 2: cross-domain intelligence
     cross_domain_insights: list[dict]
     kg_entities_created: list[str]
+    # Sprint 3: evaluation
+    enable_evaluation: bool
+    evaluation_score: float | None
 
 
 # ---------------------------------------------------------------------------
@@ -137,6 +140,31 @@ async def save_node(state: ResearchState, config: RunnableConfig | None = None) 
     return new_state
 
 
+async def evaluate_node(state: ResearchState, config: RunnableConfig | None = None) -> ResearchState:
+    if not state.get("enable_evaluation"):
+        return state
+    hypothesis_id = state.get("saved_hypothesis_id")
+    if not hypothesis_id:
+        return state
+    db = (config or {}).get("configurable", {}).get("db")  # type: ignore[union-attr]
+    if db is None:
+        return state
+    try:
+        from app.services.evaluation_service import evaluate_hypothesis
+        evaluation = await evaluate_hypothesis(db, hypothesis_id)
+        if evaluation:
+            new_state = ResearchState(**state)
+            new_state["evaluation_score"] = evaluation.overall_score
+            # Log to MLflow if run_id available
+            if state.get("mlflow_run_id"):
+                from tracking.mlflow_tracker import log_evaluation
+                log_evaluation(state["mlflow_run_id"], evaluation.overall_score, evaluation.dimension_scores or [])
+            return new_state
+    except Exception:
+        pass
+    return state
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -219,6 +247,7 @@ def _build_graph():
     builder.add_node("critique", critique_node)
     builder.add_node("debate", debate_node)
     builder.add_node("save", save_node)
+    builder.add_node("evaluate", evaluate_node)
 
     builder.set_entry_point("retrieve")
     builder.add_edge("retrieve", "summarize")
@@ -228,7 +257,8 @@ def _build_graph():
     builder.add_edge("hypothesis", "critique")
     builder.add_edge("critique", "debate")
     builder.add_edge("debate", "save")
-    builder.add_edge("save", END)
+    builder.add_edge("save", "evaluate")
+    builder.add_edge("evaluate", END)
 
     checkpointer = _make_checkpointer()
     if checkpointer is not None:
