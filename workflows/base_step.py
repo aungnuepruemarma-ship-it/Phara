@@ -1,7 +1,45 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from typing import TypedDict
 
 from agents.base_agent import AgentOutput
+
+
+class ResearchState(TypedDict, total=False):
+    """LangGraph-compatible state — mirrors PipelineContext plus new fields."""
+    question: str
+    project_id: str
+    experiment_id: str
+    user_id: str
+    agent_name: str
+    enable_debate: bool
+    enable_critique: bool
+    enable_contradiction_check: bool
+    retrieved_chunks: list[str]
+    retrieved_paper_ids: list[str]
+    evidence_summary: str
+    hypothesis: AgentOutput | None
+    saved_hypothesis_id: str | None
+    debate_results: list[AgentOutput]
+    critique: AgentOutput | None
+    contradictions: list[dict]
+    mlflow_run_id: str | None
+    cross_domain_insights: list[dict]
+    kg_entities_created: list[str]
+    enable_evaluation: bool
+    evaluation_score: float | None
+    # Sprint 5: tool broker
+    enabled_tools: list[str]
+    tool_results: list[dict]
+    # Sprint 6: ablation framework
+    ablate_retrieval: bool
+    ablate_memory: bool
+    ablate_kg: bool
+    ablate_tools: bool
+    adversarial_context: list[str]
+    retrieval_top_k: int | None
+    # Sprint 7: autonomous tool selection
+    auto_tools: bool
 
 
 @dataclass

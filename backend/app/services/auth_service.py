@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime, timedelta, timezone
 
 from jose import JWTError, jwt
@@ -36,7 +37,12 @@ async def get_user_by_email(db: AsyncSession, email: str) -> User | None:
 
 
 async def get_user_by_id(db: AsyncSession, user_id: str) -> User | None:
-    result = await db.execute(select(User).where(User.id == user_id))
+    # SQLAlchemy Uuid(as_uuid=True) requires a uuid.UUID object, not a raw string
+    try:
+        uid = uuid.UUID(user_id) if isinstance(user_id, str) else user_id
+    except ValueError:
+        return None
+    result = await db.execute(select(User).where(User.id == uid))
     return result.scalar_one_or_none()
 
 

@@ -1,4 +1,5 @@
 import uuid
+from typing import Optional
 
 from pydantic import BaseModel
 
@@ -8,11 +9,13 @@ from app.schemas.hypothesis import HypothesisOut
 class WorkflowRequest(BaseModel):
     question: str
     project_id: uuid.UUID
-    experiment_id: uuid.UUID
+    experiment_id: Optional[uuid.UUID] = None
     agent_name: str = "math_research_agent"
     enable_debate: bool = False
     enable_critique: bool = False
     enable_contradiction_check: bool = False
+    enabled_tools: list[str] = []
+    auto_tools: bool = True  # when True and enabled_tools empty, agent auto-selects tools
 
 
 class DebateEntry(BaseModel):
@@ -39,3 +42,4 @@ class WorkflowResult(BaseModel):
     critique: DebateEntry | None = None
     contradictions: list[ContradictionItem] = []
     mlflow_run_id: str | None = None
+    tool_results: list[dict] = []

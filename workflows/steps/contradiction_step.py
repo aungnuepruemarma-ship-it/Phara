@@ -47,15 +47,19 @@ def _parse(text: str) -> list[dict]:
 
 
 async def _detect(chunks: list[str]) -> list[dict]:
-    if not _settings or not _settings.llm_api_key or len(chunks) < 2:
+    if not _settings or len(chunks) < 2:
         return []
+    creds = _settings.llm_credentials
+    if not creds:
+        return []
+    base_url, api_key, model = creds
     try:
-        async with httpx.AsyncClient(timeout=60) as client:
+        async with httpx.AsyncClient(timeout=90) as client:
             resp = await client.post(
-                f"{_settings.llm_base_url}/chat/completions",
-                headers={"Authorization": f"Bearer {_settings.llm_api_key}"},
+                f"{base_url}/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}"},
                 json={
-                    "model": _settings.llm_model,
+                    "model": model,
                     "messages": [
                         {"role": "system", "content": _SYSTEM_PROMPT},
                         {"role": "user", "content": _build_prompt(chunks)},

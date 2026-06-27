@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from app.models.experiment import Experiment
     from app.models.note import Note
     from app.models.agent_memory import AgentMemory
+    from app.models.kg import KGEntity
 
 
 class Project(Base):
@@ -36,4 +37,7 @@ class Project(Base):
     notes: Mapped[list["Note"]] = relationship("Note", back_populates="project", cascade="all, delete-orphan")
     agent_memories: Mapped[list["AgentMemory"]] = relationship(
         "AgentMemory", back_populates="project", cascade="all, delete-orphan"
+    )
+    kg_entities: Mapped[list["KGEntity"]] = relationship(
+        "KGEntity", back_populates="project", cascade="all, delete-orphan"
     )

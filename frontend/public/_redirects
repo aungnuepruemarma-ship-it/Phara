@@ -1,0 +1,2 @@
+# SPA fallback — Cloudflare Pages routes all unmatched paths to index.html
+/*    /index.html   200

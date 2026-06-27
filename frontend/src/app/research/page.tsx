@@ -3,8 +3,46 @@ import { useEffect, useState } from "react";
 import AuthGuard from "@/components/layout/AuthGuard";
 import Sidebar from "@/components/layout/Sidebar";
 import api from "@/lib/api";
-import type { Project, Experiment, WorkflowResult, DebateEntry, ContradictionItem } from "@/types";
+import type { Project, Experiment, WorkflowResult, DebateEntry, ContradictionItem, ToolSpec, ToolResult } from "@/types";
 import ReactMarkdown from "react-markdown";
+
+const CATEGORY_ORDER = ["live_data", "research", "memory", "analysis", "utility"];
+
+const CATEGORY_LABELS: Record<string, string> = {
+  live_data: "Live Web & Data",
+  research: "Research",
+  memory: "Memory",
+  analysis: "Analysis",
+  utility: "Utility",
+};
+
+function ToolResultCard({ result }: { result: ToolResult }) {
+  const [open, setOpen] = useState(false);
+  const preview = result.output
+    ? JSON.stringify(result.output).slice(0, 120) + (JSON.stringify(result.output).length > 120 ? "…" : "")
+    : "";
+  return (
+    <div className="bg-surface-3 rounded-lg p-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className={`w-2 h-2 rounded-full ${result.success ? "bg-green-400" : "bg-red-400"}`} />
+          <span className="text-sm font-medium text-white">{result.tool_name}</span>
+          <span className="text-xs text-slate-500">{result.elapsed_ms.toFixed(0)}ms</span>
+        </div>
+        {result.output && (
+          <button onClick={() => setOpen(!open)} className="text-xs text-slate-400 hover:text-white">{open ? "hide" : "show"}</button>
+        )}
+      </div>
+      {result.error && <p className="text-xs text-red-400 mt-1">{result.error}</p>}
+      {open && result.output && (
+        <pre className="mt-2 text-xs text-slate-300 overflow-x-auto whitespace-pre-wrap">
+          {JSON.stringify(result.output, null, 2).slice(0, 2000)}
+        </pre>
+      )}
+      {!open && preview && <p className="text-xs text-slate-500 mt-1 truncate">{preview}</p>}
+    </div>
+  );
+}
 
 const severityColor: Record<string, string> = {
   high: "border-red-700 text-red-300",
@@ -67,6 +105,8 @@ export default function ResearchPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [experiments, setExperiments] = useState<Experiment[]>([]);
   const [agents, setAgents] = useState<{ name: string; description: string }[]>([]);
+  const [availableTools, setAvailableTools] = useState<ToolSpec[]>([]);
+  const [showTools, setShowTools] = useState(false);
   const [form, setForm] = useState({
     question: "",
     project_id: "",
@@ -75,6 +115,8 @@ export default function ResearchPage() {
     enable_debate: false,
     enable_critique: false,
     enable_contradiction_check: false,
+    enabled_tools: [] as string[],
+    auto_tools: true,
   });
   const [result, setResult] = useState<WorkflowResult | null>(null);
   const [running, setRunning] = useState(false);
@@ -83,6 +125,7 @@ export default function ResearchPage() {
   useEffect(() => {
     api.get("/projects").then((r) => setProjects(r.data));
     api.get("/research/agents").then((r) => setAgents(r.data));
+    api.get("/tools").then((r) => setAvailableTools(r.data)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -140,10 +183,13 @@ export default function ResearchPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1">Experiment</label>
-                <select value={form.experiment_id} onChange={(e) => setForm({ ...form, experiment_id: e.target.value })} required className="w-full bg-surface-3 border border-slate-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-primary-500">
-                  <option value="">Select…</option>
+                <select value={form.experiment_id} onChange={(e) => setForm({ ...form, experiment_id: e.target.value })} className="w-full bg-surface-3 border border-slate-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-primary-500">
+                  <option value="">Auto-create from question</option>
                   {experiments.map((exp) => <option key={exp.id} value={exp.id}>{exp.title}</option>)}
                 </select>
+                {form.project_id && experiments.length === 0 && (
+                  <p className="text-xs text-slate-500 mt-1">No experiments yet — a new one will be created automatically.</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1">Agent</label>
@@ -182,6 +228,87 @@ export default function ResearchPage() {
                 <span className="text-sm text-slate-300">Detect Contradictions</span>
               </label>
             </div>
+
+            {availableTools.length > 0 && (
+              <div className="space-y-2">
+                {/* Auto-select toggle */}
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={form.auto_tools}
+                    onChange={(e) => setForm({ ...form, auto_tools: e.target.checked, enabled_tools: [] })}
+                    className="w-4 h-4 accent-primary-500"
+                  />
+                  <span className="text-sm text-slate-300">Auto-select tools</span>
+                  <span className="text-xs text-slate-500">— agents pick relevant data sources automatically</span>
+                </label>
+
+                {/* Manual tool picker (shown only when auto is off) */}
+                {!form.auto_tools && (
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setShowTools(!showTools)}
+                      className="text-sm text-slate-400 hover:text-slate-300 flex items-center gap-1"
+                    >
+                      <span>{showTools ? "▾" : "▸"}</span>
+                      Manual tools ({form.enabled_tools.length} selected)
+                    </button>
+                    {showTools && (
+                      <div className="mt-3 space-y-4">
+                        {CATEGORY_ORDER.map((cat) => {
+                          const tools = availableTools.filter((t) => t.category === cat);
+                          if (tools.length === 0) return null;
+                          return (
+                            <div key={cat}>
+                              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
+                                {CATEGORY_LABELS[cat] ?? cat}
+                              </p>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {tools.map((tool) => (
+                                  <label key={tool.name} className="flex items-start gap-2 cursor-pointer bg-surface-3 rounded-lg p-2.5 hover:bg-surface-2 transition-colors">
+                                    <input
+                                      type="checkbox"
+                                      className="mt-0.5 accent-primary-500"
+                                      checked={form.enabled_tools.includes(tool.name)}
+                                      onChange={(e) => {
+                                        const updated = e.target.checked
+                                          ? [...form.enabled_tools, tool.name]
+                                          : form.enabled_tools.filter((n) => n !== tool.name);
+                                        setForm({ ...form, enabled_tools: updated });
+                                      }}
+                                    />
+                                    <div>
+                                      <p className="text-xs font-medium text-white">{tool.name}</p>
+                                      <p className="text-xs text-slate-500">{tool.description.slice(0, 90)}{tool.description.length > 90 ? "…" : ""}</p>
+                                    </div>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {form.enabled_tools.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setForm({ ...form, enabled_tools: [] })}
+                            className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+                          >
+                            Clear all
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {form.auto_tools && (
+                  <p className="text-xs text-slate-500">
+                    Tools such as Semantic Scholar, Wikipedia, arXiv, PubMed, and OpenAlex will be chosen based on your question.
+                  </p>
+                )}
+              </div>
+            )}
 
             {error && <p className="text-red-400 text-sm">{error}</p>}
 
@@ -225,6 +352,21 @@ export default function ResearchPage() {
                   </h2>
                   <div className="space-y-3">
                     {result.contradictions.map((c, i) => <ContradictionCard key={i} item={c} index={i} />)}
+                  </div>
+                </div>
+              )}
+
+              {result.tool_results && result.tool_results.length > 0 && (
+                <div className="bg-surface-2 border border-surface-3 rounded-xl p-6">
+                  <div className="flex items-center gap-3 mb-3">
+                    <h2 className="text-lg font-semibold text-white">Tools Used</h2>
+                    <span className="text-sm text-slate-400">({result.tool_results.length})</span>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-primary-900 text-primary-300 border border-primary-700">
+                      auto-selected
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {result.tool_results.map((tr, i) => <ToolResultCard key={i} result={tr} />)}
                   </div>
                 </div>
               )}

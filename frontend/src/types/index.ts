@@ -54,6 +54,8 @@ export interface Note {
   updated_at: string;
 }
 
+export type HypothesisReviewStatus = "candidate" | "under_review" | "accepted" | "rejected";
+
 export interface Hypothesis {
   id: string;
   experiment_id: string;
@@ -64,6 +66,10 @@ export interface Hypothesis {
   agent_used: string;
   confidence_score: number | null;
   created_at: string;
+  // Blueprint v1.0: every hypothesis is a candidate until reviewed
+  review_status: HypothesisReviewStatus;
+  review_notes: string | null;
+  reviewed_at: string | null;
 }
 
 export interface AgentMemory {
@@ -93,6 +99,21 @@ export interface ContradictionItem {
   severity: "high" | "medium" | "low";
 }
 
+export interface ToolSpec {
+  name: string;
+  description: string;
+  category: "research" | "memory" | "analysis" | "utility";
+  input_schema: Record<string, unknown>;
+}
+
+export interface ToolResult {
+  tool_name: string;
+  success: boolean;
+  output: any;
+  error: string | null;
+  elapsed_ms: number;
+}
+
 export interface WorkflowResult {
   hypothesis: Hypothesis;
   evidence_summary: string;
@@ -101,6 +122,7 @@ export interface WorkflowResult {
   critique: DebateEntry | null;
   contradictions: ContradictionItem[];
   mlflow_run_id: string | null;
+  tool_results: ToolResult[];
 }
 
 export interface ProjectReport {
@@ -129,4 +151,117 @@ export interface TrackingRun {
   params: Record<string, string>;
   metrics: Record<string, number>;
   tags: Record<string, string>;
+}
+
+export interface KGEntity {
+  id: string;
+  name: string;
+  entity_type: string;
+  domain: string;
+  description: string | null;
+  confidence: number;
+  source_hypothesis_id: string | null;
+  created_at?: string;
+}
+
+export interface KGEdge {
+  id: string;
+  source: string;
+  target: string;
+  relation_type: string;
+  evidence_text: string | null;
+  confidence: number;
+}
+
+export interface GraphData {
+  nodes: KGEntity[];
+  edges: KGEdge[];
+}
+
+export interface KGAnalogy {
+  relation_id: string;
+  entity_a: { id: string; name: string; domain: string };
+  entity_b: { id: string; name: string; domain: string };
+  explanation: string | null;
+  confidence: number;
+}
+
+export interface DimensionScore {
+  name: string;
+  score: number;
+  reasoning: string;
+}
+
+export interface BenchmarkScore {
+  name: string;
+  score: number;
+  details: Record<string, unknown>;
+}
+
+export interface EvaluationOut {
+  id: string;
+  hypothesis_id: string;
+  project_id: string;
+  overall_score: number;
+  verdict: "strong" | "moderate" | "weak";
+  dimension_scores: DimensionScore[];
+  benchmark_scores: BenchmarkScore[];
+  created_at: string;
+}
+
+export interface EvaluationSummary {
+  project_id: string;
+  hypothesis_count: number;
+  avg_score: number | null;
+  best_agent: string | null;
+  score_trend: number[];
+}
+
+export interface SimulationVariantIn {
+  name: string;
+  agent_name: string;
+  enable_debate: boolean;
+  enable_critique: boolean;
+  enable_contradiction_check: boolean;
+  ablate_retrieval: boolean;
+  ablate_memory: boolean;
+  ablate_kg: boolean;
+  ablate_tools: boolean;
+  adversarial_context: string[];
+  retrieval_top_k: number | null;
+}
+
+export interface SimulationRequest {
+  simulation_type: "agent_sweep" | "parameter_sweep" | "stability_test";
+  question: string;
+  experiment_id?: string;
+  variants: SimulationVariantIn[];
+  runs_per_variant: number;
+}
+
+export interface VariantResultOut {
+  id: string;
+  variant_name: string;
+  agent_name: string;
+  run_index: number;
+  hypothesis_id: string | null;
+  evaluation_score: number | null;
+  verdict: string | null;
+  dimension_scores: { name: string; score: number; reasoning: string }[];
+  full_state: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface SimulationOut {
+  id: string;
+  project_id: string;
+  experiment_id: string | null;
+  simulation_type: string;
+  question: string;
+  status: "pending" | "running" | "completed" | "failed";
+  best_variant: string | null;
+  summary: Record<string, { mean: number; std: number; runs: number } | string> | null;
+  variant_results: VariantResultOut[];
+  created_at: string;
+  updated_at: string;
 }

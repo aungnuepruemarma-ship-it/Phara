@@ -4,9 +4,11 @@ sqlalchemy==2.0.36
 asyncpg==0.30.0
 alembic==1.14.0
 pydantic==2.10.4
+pydantic[email]==2.10.4
 pydantic-settings==2.7.0
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
 python-multipart==0.0.20
 aiofiles==24.1.0
 httpx==0.28.1
@@ -16,6 +18,9 @@ sentence-transformers==3.3.1
 pymupdf==1.25.1
 psycopg2-binary==2.9.10
 mlflow==3.14.0
+langgraph>=0.2.0
+langgraph-checkpoint-sqlite
+boto3==1.35.0          # Cloudflare R2 file storage (S3-compatible)
 
 # Testing
 pytest==8.3.4

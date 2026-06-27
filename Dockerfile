@@ -1,8 +1,8 @@
 # Stage 1: Build Next.js static export
 FROM node:20-alpine AS frontend-builder
 WORKDIR /frontend
-COPY frontend/package.json ./
-RUN npm install --frozen-lockfile
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
 COPY frontend/ .
 RUN npm run build
 
@@ -35,6 +35,15 @@ COPY workflows/ ./workflows/
 COPY memory/ ./memory/
 COPY tools/ ./tools/
 COPY tracking/ ./tracking/
+COPY intelligence/ ./intelligence/
+COPY graph/ ./graph/
+COPY retrieval/ ./retrieval/
+COPY pattern_engine/ ./pattern_engine/
+COPY research_engineering/ ./research_engineering/
+COPY simulation/ ./simulation/
+COPY simulations/ ./simulations/
+COPY evaluation/ ./evaluation/
+COPY ingestion/ ./ingestion/
 
 # Built frontend
 COPY --from=frontend-builder /frontend/out ./frontend/out

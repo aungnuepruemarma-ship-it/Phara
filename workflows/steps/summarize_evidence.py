@@ -13,16 +13,18 @@ class SummarizeEvidenceStep(BaseWorkflowStep):
 
         try:
             from app.config import settings
-            if not settings.llm_api_key:
-                raise ValueError("No LLM key")
+            creds = settings.llm_credentials
+            if not creds:
+                raise ValueError("No LLM configured")
+            base_url, api_key, model = creds
 
             evidence = "\n\n".join(f"[{i+1}] {c}" for i, c in enumerate(ctx.retrieved_chunks))
-            async with httpx.AsyncClient(timeout=60) as client:
+            async with httpx.AsyncClient(timeout=90) as client:
                 resp = await client.post(
-                    f"{settings.llm_base_url}/chat/completions",
-                    headers={"Authorization": f"Bearer {settings.llm_api_key}"},
+                    f"{base_url}/chat/completions",
+                    headers={"Authorization": f"Bearer {api_key}"},
                     json={
-                        "model": settings.llm_model,
+                        "model": model,
                         "messages": [
                             {"role": "system", "content": "Summarize the evidence in 3-5 concise sentences."},
                             {"role": "user", "content": f"Evidence:\n{evidence}\n\nQuestion: {ctx.question}"},

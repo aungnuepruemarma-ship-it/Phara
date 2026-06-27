@@ -1,0 +1,10 @@
+name = "universal-intelligence-lab"
+compatibility_date = "2024-01-01"
+
+[env.production]
+name = "universal-intelligence-lab"
+
+# Cloudflare Pages — deploy via `wrangler pages deploy out/`
+# Build command:  npm run build
+# Build output:   out
+# Root directory: frontend

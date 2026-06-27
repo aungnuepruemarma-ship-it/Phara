@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.routers import auth, projects, papers, experiments, notes, research, admin, memory, reports
+from app.routers import knowledge_graph, evaluation, simulations, tools, hypotheses
 
 app = FastAPI(
     title="Universal Intelligence Lab API",
@@ -35,11 +36,17 @@ app.include_router(research.router, prefix=API_PREFIX)
 app.include_router(admin.router, prefix=API_PREFIX)
 app.include_router(memory.router, prefix=API_PREFIX)
 app.include_router(reports.router, prefix=API_PREFIX)
+app.include_router(knowledge_graph.router, prefix=API_PREFIX)
+app.include_router(evaluation.router, prefix=API_PREFIX)
+app.include_router(simulations.router, prefix=API_PREFIX)
+app.include_router(tools.router, prefix=API_PREFIX)
+app.include_router(hypotheses.router, prefix=API_PREFIX)
 
 
 @app.get("/health")
+@app.get("/api/v1/health")
 async def health():
-    return {"status": "ok"}
+    return {"status": "ok", "version": "1.0.0"}
 
 
 @app.on_event("startup")
@@ -54,12 +61,16 @@ async def on_startup():
 
 
 # Serve Next.js static export when present (HF Spaces single-container mode)
-FRONTEND_DIR = Path(__file__).resolve().parents[3] / "frontend" / "out"
+FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend" / "out"
 
 if FRONTEND_DIR.exists():
     _next_dir = FRONTEND_DIR / "_next"
     if _next_dir.exists():
         app.mount("/_next", StaticFiles(directory=_next_dir), name="nextjs-assets")
+
+    @app.get("/", include_in_schema=False)
+    async def spa_root():
+        return FileResponse(FRONTEND_DIR / "index.html")
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def spa_fallback(full_path: str):

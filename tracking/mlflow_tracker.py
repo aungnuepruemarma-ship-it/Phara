@@ -103,6 +103,21 @@ def log_research_run(
         return None
 
 
+def log_evaluation(run_id: str, overall_score: float, dimension_scores: list[dict]) -> None:
+    """Attach evaluation metrics to an existing MLflow run."""
+    if not _MLFLOW_AVAILABLE or not run_id:
+        return
+    try:
+        with mlflow.start_run(run_id=run_id):
+            metrics: dict[str, float] = {"eval_overall_score": overall_score}
+            for dim in dimension_scores:
+                key = f"eval_{dim.get('name', 'unknown')}"
+                metrics[key] = float(dim.get("score", 0.0))
+            mlflow.log_metrics(metrics)
+    except Exception:
+        pass
+
+
 def get_runs_for_project(project_id: str, max_results: int = 50) -> list[dict]:
     """Return recent MLflow runs for a project as plain dicts."""
     if not _MLFLOW_AVAILABLE:
