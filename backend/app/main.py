@@ -61,7 +61,7 @@ async def on_startup():
 
 
 # Serve Next.js static export when present (HF Spaces single-container mode)
-FRONTEND_DIR = Path(__file__).resolve().parents[3] / "frontend" / "out"
+FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend" / "out"
 
 if FRONTEND_DIR.exists():
     _next_dir = FRONTEND_DIR / "_next"
