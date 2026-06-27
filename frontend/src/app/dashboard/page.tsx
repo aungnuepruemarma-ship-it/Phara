@@ -20,8 +20,8 @@ export default function Dashboard() {
   const [hypotheses, setHypotheses] = useState<Hypothesis[]>([]);
 
   useEffect(() => {
-    api.get("/projects").then((r) => setProjects(r.data));
-    api.get("/research/history").then((r) => setHypotheses(r.data));
+    api.get("/projects").then((r) => setProjects(r.data)).catch(() => {});
+    api.get("/research/history").then((r) => setHypotheses(r.data)).catch(() => {});
   }, []);
 
   const totalExperiments = projects.length;

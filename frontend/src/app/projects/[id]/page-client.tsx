@@ -18,7 +18,7 @@ export default function ProjectDetail() {
   const [summary, setSummary] = useState<Summary | null>(null);
 
   useEffect(() => {
-    if (id) api.get(`/projects/${id}/summary`).then((r) => setSummary(r.data));
+    if (id) api.get(`/projects/${id}/summary`).then((r) => setSummary(r.data)).catch(() => {});
   }, [id]);
 
   if (!summary) return (

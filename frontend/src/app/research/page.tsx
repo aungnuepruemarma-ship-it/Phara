@@ -123,14 +123,14 @@ export default function ResearchPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    api.get("/projects").then((r) => setProjects(r.data));
-    api.get("/research/agents").then((r) => setAgents(r.data));
+    api.get("/projects").then((r) => setProjects(r.data)).catch(() => {});
+    api.get("/research/agents").then((r) => setAgents(r.data)).catch(() => {});
     api.get("/tools").then((r) => setAvailableTools(r.data)).catch(() => {});
   }, []);
 
   useEffect(() => {
     if (form.project_id) {
-      api.get(`/projects/${form.project_id}/experiments`).then((r) => setExperiments(r.data));
+      api.get(`/projects/${form.project_id}/experiments`).then((r) => setExperiments(r.data)).catch(() => {});
     } else {
       setExperiments([]);
     }
