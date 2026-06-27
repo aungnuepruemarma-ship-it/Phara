@@ -38,6 +38,8 @@ class ResearchState(TypedDict, total=False):
     ablate_tools: bool
     adversarial_context: list[str]
     retrieval_top_k: int | None
+    # Sprint 7: autonomous tool selection
+    auto_tools: bool
 
 
 @dataclass

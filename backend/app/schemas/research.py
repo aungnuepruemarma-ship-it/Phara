@@ -14,6 +14,7 @@ class WorkflowRequest(BaseModel):
     enable_critique: bool = False
     enable_contradiction_check: bool = False
     enabled_tools: list[str] = []
+    auto_tools: bool = True  # when True and enabled_tools empty, agent auto-selects tools
 
 
 class DebateEntry(BaseModel):

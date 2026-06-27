@@ -40,6 +40,7 @@ async def run_research_workflow(request: WorkflowRequest, db: AsyncSession, curr
         "kg_entities_created": [],
         "enabled_tools": list(getattr(request, "enabled_tools", []) or []),
         "tool_results": [],
+        "auto_tools": getattr(request, "auto_tools", True),
     }
 
     # Try LangGraph first; fall back to legacy pipeline

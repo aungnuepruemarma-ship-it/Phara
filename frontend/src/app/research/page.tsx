@@ -116,6 +116,7 @@ export default function ResearchPage() {
     enable_critique: false,
     enable_contradiction_check: false,
     enabled_tools: [] as string[],
+    auto_tools: true,
   });
   const [result, setResult] = useState<WorkflowResult | null>(null);
   const [running, setRunning] = useState(false);
@@ -226,59 +227,82 @@ export default function ResearchPage() {
             </div>
 
             {availableTools.length > 0 && (
-              <div>
-                <button
-                  type="button"
-                  onClick={() => setShowTools(!showTools)}
-                  className="text-sm text-slate-400 hover:text-slate-300 flex items-center gap-1"
-                >
-                  <span>{showTools ? "▾" : "▸"}</span>
-                  Tools ({form.enabled_tools.length} selected)
-                </button>
-                {showTools && (
-                  <div className="mt-3 space-y-4">
-                    {CATEGORY_ORDER.map((cat) => {
-                      const tools = availableTools.filter((t) => t.category === cat);
-                      if (tools.length === 0) return null;
-                      return (
-                        <div key={cat}>
-                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
-                            {CATEGORY_LABELS[cat] ?? cat}
-                          </p>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            {tools.map((tool) => (
-                              <label key={tool.name} className="flex items-start gap-2 cursor-pointer bg-surface-3 rounded-lg p-2.5 hover:bg-surface-2 transition-colors">
-                                <input
-                                  type="checkbox"
-                                  className="mt-0.5 accent-primary-500"
-                                  checked={form.enabled_tools.includes(tool.name)}
-                                  onChange={(e) => {
-                                    const updated = e.target.checked
-                                      ? [...form.enabled_tools, tool.name]
-                                      : form.enabled_tools.filter((n) => n !== tool.name);
-                                    setForm({ ...form, enabled_tools: updated });
-                                  }}
-                                />
-                                <div>
-                                  <p className="text-xs font-medium text-white">{tool.name}</p>
-                                  <p className="text-xs text-slate-500">{tool.description.slice(0, 90)}{tool.description.length > 90 ? "…" : ""}</p>
-                                </div>
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {form.enabled_tools.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setForm({ ...form, enabled_tools: [] })}
-                        className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
-                      >
-                        Clear all
-                      </button>
+              <div className="space-y-2">
+                {/* Auto-select toggle */}
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={form.auto_tools}
+                    onChange={(e) => setForm({ ...form, auto_tools: e.target.checked, enabled_tools: [] })}
+                    className="w-4 h-4 accent-primary-500"
+                  />
+                  <span className="text-sm text-slate-300">Auto-select tools</span>
+                  <span className="text-xs text-slate-500">— agents pick relevant data sources automatically</span>
+                </label>
+
+                {/* Manual tool picker (shown only when auto is off) */}
+                {!form.auto_tools && (
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setShowTools(!showTools)}
+                      className="text-sm text-slate-400 hover:text-slate-300 flex items-center gap-1"
+                    >
+                      <span>{showTools ? "▾" : "▸"}</span>
+                      Manual tools ({form.enabled_tools.length} selected)
+                    </button>
+                    {showTools && (
+                      <div className="mt-3 space-y-4">
+                        {CATEGORY_ORDER.map((cat) => {
+                          const tools = availableTools.filter((t) => t.category === cat);
+                          if (tools.length === 0) return null;
+                          return (
+                            <div key={cat}>
+                              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
+                                {CATEGORY_LABELS[cat] ?? cat}
+                              </p>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {tools.map((tool) => (
+                                  <label key={tool.name} className="flex items-start gap-2 cursor-pointer bg-surface-3 rounded-lg p-2.5 hover:bg-surface-2 transition-colors">
+                                    <input
+                                      type="checkbox"
+                                      className="mt-0.5 accent-primary-500"
+                                      checked={form.enabled_tools.includes(tool.name)}
+                                      onChange={(e) => {
+                                        const updated = e.target.checked
+                                          ? [...form.enabled_tools, tool.name]
+                                          : form.enabled_tools.filter((n) => n !== tool.name);
+                                        setForm({ ...form, enabled_tools: updated });
+                                      }}
+                                    />
+                                    <div>
+                                      <p className="text-xs font-medium text-white">{tool.name}</p>
+                                      <p className="text-xs text-slate-500">{tool.description.slice(0, 90)}{tool.description.length > 90 ? "…" : ""}</p>
+                                    </div>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {form.enabled_tools.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setForm({ ...form, enabled_tools: [] })}
+                            className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+                          >
+                            Clear all
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
+                )}
+
+                {form.auto_tools && (
+                  <p className="text-xs text-slate-500">
+                    Tools such as Semantic Scholar, Wikipedia, arXiv, PubMed, and OpenAlex will be chosen based on your question.
+                  </p>
                 )}
               </div>
             )}
@@ -331,9 +355,13 @@ export default function ResearchPage() {
 
               {result.tool_results && result.tool_results.length > 0 && (
                 <div className="bg-surface-2 border border-surface-3 rounded-xl p-6">
-                  <h2 className="text-lg font-semibold text-white mb-3">
-                    Tools Used <span className="text-sm font-normal text-slate-400">({result.tool_results.length})</span>
-                  </h2>
+                  <div className="flex items-center gap-3 mb-3">
+                    <h2 className="text-lg font-semibold text-white">Tools Used</h2>
+                    <span className="text-sm text-slate-400">({result.tool_results.length})</span>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-primary-900 text-primary-300 border border-primary-700">
+                      auto-selected
+                    </span>
+                  </div>
                   <div className="space-y-2">
                     {result.tool_results.map((tr, i) => <ToolResultCard key={i} result={tr} />)}
                   </div>

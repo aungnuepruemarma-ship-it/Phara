@@ -54,6 +54,8 @@ class ResearchState(TypedDict, total=False):
     ablate_tools: bool
     adversarial_context: list[str]
     retrieval_top_k: int | None
+    # Sprint 7: autonomous tool selection
+    auto_tools: bool
 
 
 # ---------------------------------------------------------------------------
@@ -166,6 +168,141 @@ async def save_node(state: ResearchState, config: RunnableConfig | None = None) 
 
     new_state["kg_entities_created"] = kg_ids
     return new_state
+
+
+async def tool_selector_node(state: ResearchState, config: RunnableConfig | None = None) -> ResearchState:
+    """Autonomously pick the most relevant tools for the research question.
+
+    Skipped when:
+      - enabled_tools is already set (user made an explicit selection), or
+      - auto_tools is False
+    Otherwise uses LLM with keyword-heuristic fallback to fill enabled_tools.
+    """
+    if list(state.get("enabled_tools") or []):
+        return state  # manual selection takes precedence
+    if not state.get("auto_tools", True):
+        return state  # auto-select explicitly disabled
+
+    question = state.get("question", "")
+    selected = _heuristic_select_tools(question)
+
+    try:
+        llm_picks = await _llm_select_tools(question, selected)
+        if llm_picks:
+            selected = llm_picks
+    except Exception:
+        pass
+
+    new_state = ResearchState(**state)
+    new_state["enabled_tools"] = selected
+    return new_state
+
+
+def _heuristic_select_tools(question: str) -> list[str]:
+    """Keyword-based tool selection — always fast, no LLM required."""
+    q = question.lower()
+    tools: list[str] = []
+
+    # Universal: broad academic search + background knowledge
+    tools.append("semantic_scholar_search")
+    tools.append("wikipedia_search")
+
+    # Biomedical domain
+    _bio = {"gene", "protein", "cell", "cancer", "drug", "clinical", "disease",
+            "biology", "medical", "health", "virus", "bacteria", "dna", "rna",
+            "genomic", "brain", "psychiatric", "neuron", "enzyme", "antibody"}
+    if any(w in q for w in _bio):
+        tools.append("pubmed_search")
+
+    # CS / ML / Physics / Math
+    _cs = {"algorithm", "machine learning", "neural", "deep learning", "model",
+           "transformer", "gradient", "quantum", "computing", "cryptography",
+           "optimization", "reinforcement", "embedding", "attention", "diffusion",
+           "topology", "differential", "probability", "statistics"}
+    if any(w in q for w in _cs):
+        tools.append("arxiv_search")
+
+    # Current events / recent data
+    _recent = {"current", "recent", "latest", "new", "today", "news", "2024", "2025",
+               "state of the art", "sota", "breakthrough", "emerging"}
+    if any(w in q for w in _recent):
+        tools.append("web_search")
+
+    # General scholarly coverage
+    tools.append("openalex_search")
+
+    # Deduplicate while preserving order
+    seen: set[str] = set()
+    unique: list[str] = []
+    for t in tools:
+        if t not in seen:
+            seen.add(t)
+            unique.append(t)
+
+    return unique[:5]
+
+
+async def _llm_select_tools(question: str, heuristic_picks: list[str]) -> list[str]:
+    """Ask the LLM to refine/replace the heuristic tool list. Returns [] on any failure."""
+    import json
+    import httpx
+
+    try:
+        from app.config import settings as _s
+    except ImportError:
+        return []
+    if not _s or not _s.llm_api_key:
+        return []
+
+    import sys
+    from pathlib import Path
+    _root = str(Path(__file__).resolve().parents[1])
+    if _root not in sys.path:
+        sys.path.insert(0, _root)
+
+    import tools.builtin_tools  # noqa: F401
+    from tools.tool_registry import list_tools
+    all_tools = [t.name for t in list_tools()]
+
+    tool_descriptions = "\n".join(
+        f"  {t.name}: {t.description[:80]}"
+        for t in list_tools()
+    )
+    prompt = (
+        f"Research question: {question}\n\n"
+        f"Available tools:\n{tool_descriptions}\n\n"
+        "Select 2 to 5 tools that would provide the most useful real-time evidence for this question. "
+        "Prefer live-data tools (web_search, wikipedia_search, semantic_scholar_search, pubmed_search, "
+        "openalex_search, crossref_search, arxiv_search). "
+        "Return ONLY a JSON array of tool name strings, e.g. [\"semantic_scholar_search\", \"pubmed_search\"]"
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(
+                f"{_s.llm_base_url}/chat/completions",
+                headers={"Authorization": f"Bearer {_s.llm_api_key}"},
+                json={
+                    "model": _s.llm_model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.0,
+                    "max_tokens": 100,
+                },
+            )
+            resp.raise_for_status()
+            content = resp.json()["choices"][0]["message"]["content"]
+
+        start = content.find("[")
+        end = content.rfind("]") + 1
+        if start >= 0 and end > start:
+            names: list[str] = json.loads(content[start:end])
+            valid = [n for n in names if n in set(all_tools)]
+            if valid:
+                return valid[:5]
+    except Exception:
+        pass
+
+    return []
 
 
 async def tool_use_node(state: ResearchState, config: RunnableConfig | None = None) -> ResearchState:
@@ -358,6 +495,8 @@ def _build_graph():
     builder = StateGraph(ResearchState)
     builder.add_node("retrieve", retrieve_node)
     builder.add_node("summarize", summarize_node)
+    builder.add_node("tool_selector", tool_selector_node)
+    builder.add_node("tool_use", tool_use_node)
     builder.add_node("cross_domain", cross_domain_node)
     builder.add_node("contradiction", contradiction_node)
     builder.add_node("hypothesis", hypothesis_node)
@@ -365,11 +504,11 @@ def _build_graph():
     builder.add_node("debate", debate_node)
     builder.add_node("save", save_node)
     builder.add_node("evaluate", evaluate_node)
-    builder.add_node("tool_use", tool_use_node)
 
     builder.set_entry_point("retrieve")
     builder.add_edge("retrieve", "summarize")
-    builder.add_edge("summarize", "tool_use")
+    builder.add_edge("summarize", "tool_selector")
+    builder.add_edge("tool_selector", "tool_use")
     builder.add_edge("tool_use", "cross_domain")
     builder.add_edge("cross_domain", "contradiction")
     builder.add_edge("contradiction", "hypothesis")
