@@ -183,10 +183,13 @@ export default function ResearchPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1">Experiment</label>
-                <select value={form.experiment_id} onChange={(e) => setForm({ ...form, experiment_id: e.target.value })} required className="w-full bg-surface-3 border border-slate-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-primary-500">
-                  <option value="">Select…</option>
+                <select value={form.experiment_id} onChange={(e) => setForm({ ...form, experiment_id: e.target.value })} className="w-full bg-surface-3 border border-slate-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-primary-500">
+                  <option value="">Auto-create from question</option>
                   {experiments.map((exp) => <option key={exp.id} value={exp.id}>{exp.title}</option>)}
                 </select>
+                {form.project_id && experiments.length === 0 && (
+                  <p className="text-xs text-slate-500 mt-1">No experiments yet — a new one will be created automatically.</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1">Agent</label>

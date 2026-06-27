@@ -14,14 +14,30 @@ if _repo_root not in sys.path:
 async def run_research_workflow(request: WorkflowRequest, db: AsyncSession, current_user: User) -> WorkflowResult:
     from app.config import settings
     from sqlalchemy import select
+    from app.models.experiment import Experiment
     from app.models.hypothesis import Hypothesis
     from app.models.project import Project
     import uuid
 
+    # Auto-create experiment if none supplied
+    experiment_id = request.experiment_id
+    if experiment_id is None:
+        short_title = request.question[:120].rstrip()
+        exp = Experiment(
+            id=uuid.uuid4(),
+            project_id=request.project_id,
+            title=short_title,
+            status="running",
+        )
+        db.add(exp)
+        await db.commit()
+        await db.refresh(exp)
+        experiment_id = exp.id
+
     initial_state = {
         "question": request.question,
         "project_id": str(request.project_id),
-        "experiment_id": str(request.experiment_id),
+        "experiment_id": str(experiment_id),
         "user_id": str(current_user.id),
         "agent_name": request.agent_name,
         "enable_critique": request.enable_critique,
@@ -52,7 +68,7 @@ async def run_research_workflow(request: WorkflowRequest, db: AsyncSession, curr
                 initial_state,
                 config={
                     "configurable": {
-                        "thread_id": str(request.experiment_id),
+                        "thread_id": str(experiment_id),
                         "db": db,
                     }
                 },
@@ -86,7 +102,7 @@ async def run_research_workflow(request: WorkflowRequest, db: AsyncSession, curr
         ctx = PipelineContext(
             question=request.question,
             project_id=str(request.project_id),
-            experiment_id=str(request.experiment_id),
+            experiment_id=str(experiment_id),
             user_id=str(current_user.id),
             agent_name=request.agent_name,
             enable_critique=request.enable_critique,
@@ -126,7 +142,7 @@ async def run_research_workflow(request: WorkflowRequest, db: AsyncSession, curr
                 question=request.question,
                 agent_name=request.agent_name,
                 project_id=str(request.project_id),
-                experiment_id=str(request.experiment_id),
+                experiment_id=str(experiment_id),
             ),
             metrics=RunMetrics(
                 confidence_score=hypothesis.confidence_score or 0.0,

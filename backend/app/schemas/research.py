@@ -1,4 +1,5 @@
 import uuid
+from typing import Optional
 
 from pydantic import BaseModel
 
@@ -8,7 +9,7 @@ from app.schemas.hypothesis import HypothesisOut
 class WorkflowRequest(BaseModel):
     question: str
     project_id: uuid.UUID
-    experiment_id: uuid.UUID
+    experiment_id: Optional[uuid.UUID] = None
     agent_name: str = "math_research_agent"
     enable_debate: bool = False
     enable_critique: bool = False
