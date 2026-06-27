@@ -6,7 +6,15 @@ import api from "@/lib/api";
 import type { Project, Experiment, WorkflowResult, DebateEntry, ContradictionItem, ToolSpec, ToolResult } from "@/types";
 import ReactMarkdown from "react-markdown";
 
-const CATEGORY_ORDER = ["research", "memory", "analysis", "utility"];
+const CATEGORY_ORDER = ["live_data", "research", "memory", "analysis", "utility"];
+
+const CATEGORY_LABELS: Record<string, string> = {
+  live_data: "Live Web & Data",
+  research: "Research",
+  memory: "Memory",
+  analysis: "Analysis",
+  utility: "Utility",
+};
 
 function ToolResultCard({ result }: { result: ToolResult }) {
   const [open, setOpen] = useState(false);
@@ -228,29 +236,47 @@ export default function ResearchPage() {
                   Tools ({form.enabled_tools.length} selected)
                 </button>
                 {showTools && (
-                  <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {CATEGORY_ORDER.flatMap((cat) =>
-                      availableTools
-                        .filter((t) => t.category === cat)
-                        .map((tool) => (
-                          <label key={tool.name} className="flex items-start gap-2 cursor-pointer bg-surface-3 rounded-lg p-2.5 hover:bg-surface-2 transition-colors">
-                            <input
-                              type="checkbox"
-                              className="mt-0.5 accent-primary-500"
-                              checked={form.enabled_tools.includes(tool.name)}
-                              onChange={(e) => {
-                                const updated = e.target.checked
-                                  ? [...form.enabled_tools, tool.name]
-                                  : form.enabled_tools.filter((n) => n !== tool.name);
-                                setForm({ ...form, enabled_tools: updated });
-                              }}
-                            />
-                            <div>
-                              <p className="text-xs font-medium text-white">{tool.name}</p>
-                              <p className="text-xs text-slate-500">{tool.description.slice(0, 80)}…</p>
-                            </div>
-                          </label>
-                        ))
+                  <div className="mt-3 space-y-4">
+                    {CATEGORY_ORDER.map((cat) => {
+                      const tools = availableTools.filter((t) => t.category === cat);
+                      if (tools.length === 0) return null;
+                      return (
+                        <div key={cat}>
+                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
+                            {CATEGORY_LABELS[cat] ?? cat}
+                          </p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {tools.map((tool) => (
+                              <label key={tool.name} className="flex items-start gap-2 cursor-pointer bg-surface-3 rounded-lg p-2.5 hover:bg-surface-2 transition-colors">
+                                <input
+                                  type="checkbox"
+                                  className="mt-0.5 accent-primary-500"
+                                  checked={form.enabled_tools.includes(tool.name)}
+                                  onChange={(e) => {
+                                    const updated = e.target.checked
+                                      ? [...form.enabled_tools, tool.name]
+                                      : form.enabled_tools.filter((n) => n !== tool.name);
+                                    setForm({ ...form, enabled_tools: updated });
+                                  }}
+                                />
+                                <div>
+                                  <p className="text-xs font-medium text-white">{tool.name}</p>
+                                  <p className="text-xs text-slate-500">{tool.description.slice(0, 90)}{tool.description.length > 90 ? "…" : ""}</p>
+                                </div>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {form.enabled_tools.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setForm({ ...form, enabled_tools: [] })}
+                        className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+                      >
+                        Clear all
+                      </button>
                     )}
                   </div>
                 )}

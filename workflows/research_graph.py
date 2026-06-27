@@ -187,16 +187,37 @@ async def tool_use_node(state: ResearchState, config: RunnableConfig | None = No
 
     for tool_name in enabled:
         args: dict = {}
+        question = state.get("question", "")
+        project_id = state.get("project_id", "")
         if tool_name == "knowledge_search":
-            args = {"query": state.get("question", ""), "project_id": state.get("project_id", ""), "top_k": 5}
+            args = {"query": question, "project_id": project_id, "top_k": 5}
         elif tool_name == "extract_entities":
-            args = {"text": state.get("question", "")}
+            args = {"text": question}
         elif tool_name == "find_analogies":
-            args = {"entities": extracted_entities, "project_id": state.get("project_id", "")}
+            args = {"entities": extracted_entities, "project_id": project_id}
         elif tool_name == "arxiv_search":
-            args = {"query": state.get("question", ""), "max_results": 5}
+            args = {"query": question, "max_results": 5}
         elif tool_name == "agent_run":
-            args = {"agent_name": state.get("agent_name", "math_research_agent"), "question": state.get("question", ""), "context": list(state.get("retrieved_chunks") or [])}
+            args = {"agent_name": state.get("agent_name", "math_research_agent"), "question": question, "context": list(state.get("retrieved_chunks") or [])}
+        # Sprint 7: real-time data tools
+        elif tool_name == "web_search":
+            args = {"query": question, "max_results": 5}
+        elif tool_name == "web_browse":
+            # browse first retrieved URL or skip if none
+            chunks = list(state.get("retrieved_chunks") or [])
+            import re as _re_tun
+            url_match = _re_tun.search(r"https?://\S+", " ".join(chunks[:3]))
+            args = {"url": url_match.group(0) if url_match else "https://en.wikipedia.org/wiki/" + question.replace(" ", "_")[:60], "max_chars": 3000}
+        elif tool_name == "wikipedia_search":
+            args = {"query": question, "top_k": 3}
+        elif tool_name == "semantic_scholar_search":
+            args = {"query": question, "max_results": 5}
+        elif tool_name == "pubmed_search":
+            args = {"query": question, "max_results": 5}
+        elif tool_name == "crossref_search":
+            args = {"query": question, "max_results": 5}
+        elif tool_name == "openalex_search":
+            args = {"query": question, "max_results": 5}
 
         tr = await call_tool(tool_name, args)
         result_dict = tr.to_dict()
@@ -208,6 +229,31 @@ async def tool_use_node(state: ResearchState, config: RunnableConfig | None = No
 
     new_state = ResearchState(**state)
     new_state["tool_results"] = results
+
+    # Merge real-time data into retrieved_chunks so hypothesis node sees it
+    live_chunks: list[str] = []
+    LIVE_TOOLS = {"web_search", "wikipedia_search", "semantic_scholar_search",
+                  "pubmed_search", "crossref_search", "openalex_search", "web_browse", "arxiv_search"}
+    for r in results:
+        if not r.get("success") or r["tool_name"] not in LIVE_TOOLS:
+            continue
+        output = r.get("output")
+        if isinstance(output, list):
+            for item in output[:5]:
+                if isinstance(item, dict):
+                    parts = []
+                    for field in ("title", "snippet", "summary", "abstract", "text"):
+                        if item.get(field):
+                            parts.append(str(item[field])[:300])
+                    if parts:
+                        live_chunks.append(" | ".join(parts))
+        elif isinstance(output, dict) and output.get("text"):
+            live_chunks.append(output["text"][:600])
+
+    if live_chunks:
+        existing = list(new_state.get("retrieved_chunks") or [])
+        new_state["retrieved_chunks"] = existing + live_chunks
+
     return new_state
 
 
