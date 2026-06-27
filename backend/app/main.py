@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.routers import auth, projects, papers, experiments, notes, research, admin, memory, reports
+from app.routers import knowledge_graph
 
 app = FastAPI(
     title="Universal Intelligence Lab API",
@@ -35,6 +36,7 @@ app.include_router(research.router, prefix=API_PREFIX)
 app.include_router(admin.router, prefix=API_PREFIX)
 app.include_router(memory.router, prefix=API_PREFIX)
 app.include_router(reports.router, prefix=API_PREFIX)
+app.include_router(knowledge_graph.router, prefix=API_PREFIX)
 
 
 @app.get("/health")

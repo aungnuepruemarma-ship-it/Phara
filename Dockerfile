@@ -35,6 +35,7 @@ COPY workflows/ ./workflows/
 COPY memory/ ./memory/
 COPY tools/ ./tools/
 COPY tracking/ ./tracking/
+COPY intelligence/ ./intelligence/
 
 # Built frontend
 COPY --from=frontend-builder /frontend/out ./frontend/out

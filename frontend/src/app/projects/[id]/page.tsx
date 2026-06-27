@@ -33,6 +33,7 @@ export default function ProjectDetail() {
     { href: `/projects/${id}/notes`, label: "Notes", count: summary.note_count },
     { href: `/projects/${id}/report`, label: "Report", count: null },
     { href: `/projects/${id}/tracking`, label: "Tracking", count: null },
+    { href: `/projects/${id}/graph`, label: "Graph", count: null },
   ];
 
   return (

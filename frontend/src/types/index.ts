@@ -130,3 +130,36 @@ export interface TrackingRun {
   metrics: Record<string, number>;
   tags: Record<string, string>;
 }
+
+export interface KGEntity {
+  id: string;
+  name: string;
+  entity_type: string;
+  domain: string;
+  description: string | null;
+  confidence: number;
+  source_hypothesis_id: string | null;
+  created_at?: string;
+}
+
+export interface KGEdge {
+  id: string;
+  source: string;
+  target: string;
+  relation_type: string;
+  evidence_text: string | null;
+  confidence: number;
+}
+
+export interface GraphData {
+  nodes: KGEntity[];
+  edges: KGEdge[];
+}
+
+export interface KGAnalogy {
+  relation_id: string;
+  entity_a: { id: string; name: string; domain: string };
+  entity_b: { id: string; name: string; domain: string };
+  explanation: string | null;
+  confidence: number;
+}

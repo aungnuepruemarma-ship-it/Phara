@@ -72,10 +72,12 @@ def _embed_paper(paper_id: str, file_path: str, project_id: str) -> None:
         from tools.pdf_parser import extract_text
         from tools.text_chunker import chunk_text
         from memory.vector_store import upsert_paper
+        from workflows.steps.index_knowledge_step import index_paper_knowledge
 
         text = extract_text(file_path)
         chunks = chunk_text(text, size=settings.chunk_size, overlap=settings.chunk_overlap)
         count = upsert_paper(paper_id, chunks, project_id)
+        index_paper_knowledge(paper_id, chunks, project_id)
 
         async def _update_status():
             async with AsyncSessionLocal() as session:

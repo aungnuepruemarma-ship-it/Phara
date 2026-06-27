@@ -16,6 +16,8 @@ sentence-transformers==3.3.1
 pymupdf==1.25.1
 psycopg2-binary==2.9.10
 mlflow==3.14.0
+langgraph>=0.2.0
+langgraph-checkpoint-sqlite
 
 # Testing
 pytest==8.3.4
