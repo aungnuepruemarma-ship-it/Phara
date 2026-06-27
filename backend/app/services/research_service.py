@@ -38,6 +38,8 @@ async def run_research_workflow(request: WorkflowRequest, db: AsyncSession, curr
         "mlflow_run_id": None,
         "cross_domain_insights": [],
         "kg_entities_created": [],
+        "enabled_tools": list(getattr(request, "enabled_tools", []) or []),
+        "tool_results": [],
     }
 
     # Try LangGraph first; fall back to legacy pipeline
@@ -105,6 +107,7 @@ async def run_research_workflow(request: WorkflowRequest, db: AsyncSession, curr
             "enable_critique": ctx.enable_critique,
             "cross_domain_insights": [],
             "kg_entities_created": [],
+            "tool_results": [],
         }
 
     result = await db.execute(
@@ -170,6 +173,7 @@ async def run_research_workflow(request: WorkflowRequest, db: AsyncSession, curr
         critique=critique_entry,
         contradictions=final_state.get("contradictions", []),
         mlflow_run_id=final_state.get("mlflow_run_id"),
+        tool_results=final_state.get("tool_results") or [],
     )
 
 

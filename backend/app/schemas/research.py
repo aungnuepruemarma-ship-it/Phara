@@ -13,6 +13,7 @@ class WorkflowRequest(BaseModel):
     enable_debate: bool = False
     enable_critique: bool = False
     enable_contradiction_check: bool = False
+    enabled_tools: list[str] = []
 
 
 class DebateEntry(BaseModel):
@@ -39,3 +40,4 @@ class WorkflowResult(BaseModel):
     critique: DebateEntry | None = None
     contradictions: list[ContradictionItem] = []
     mlflow_run_id: str | None = None
+    tool_results: list[dict] = []

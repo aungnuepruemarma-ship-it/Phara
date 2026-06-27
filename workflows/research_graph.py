@@ -44,6 +44,9 @@ class ResearchState(TypedDict, total=False):
     # Sprint 3: evaluation
     enable_evaluation: bool
     evaluation_score: float | None
+    # Sprint 5: tool broker
+    enabled_tools: list[str]
+    tool_results: list[dict]
 
 
 # ---------------------------------------------------------------------------
@@ -137,6 +140,49 @@ async def save_node(state: ResearchState, config: RunnableConfig | None = None) 
             pass
 
     new_state["kg_entities_created"] = kg_ids
+    return new_state
+
+
+async def tool_use_node(state: ResearchState, config: RunnableConfig | None = None) -> ResearchState:
+    enabled = list(state.get("enabled_tools") or [])
+    if not enabled:
+        return state
+
+    import sys
+    from pathlib import Path
+    _root = str(Path(__file__).resolve().parents[1])
+    if _root not in sys.path:
+        sys.path.insert(0, _root)
+
+    import tools.builtin_tools  # noqa: F401 — ensure registration
+    from tools.tool_registry import call_tool
+
+    results: list[dict] = []
+    extracted_entities: list[dict] = []
+
+    for tool_name in enabled:
+        args: dict = {}
+        if tool_name == "knowledge_search":
+            args = {"query": state.get("question", ""), "project_id": state.get("project_id", ""), "top_k": 5}
+        elif tool_name == "extract_entities":
+            args = {"text": state.get("question", "")}
+        elif tool_name == "find_analogies":
+            args = {"entities": extracted_entities, "project_id": state.get("project_id", "")}
+        elif tool_name == "arxiv_search":
+            args = {"query": state.get("question", ""), "max_results": 5}
+        elif tool_name == "agent_run":
+            args = {"agent_name": state.get("agent_name", "math_research_agent"), "question": state.get("question", ""), "context": list(state.get("retrieved_chunks") or [])}
+
+        tr = await call_tool(tool_name, args)
+        result_dict = tr.to_dict()
+        results.append(result_dict)
+
+        # Pass entity output to find_analogies if both are enabled
+        if tool_name == "extract_entities" and tr.success and isinstance(tr.output, list):
+            extracted_entities = tr.output
+
+    new_state = ResearchState(**state)
+    new_state["tool_results"] = results
     return new_state
 
 
@@ -248,10 +294,12 @@ def _build_graph():
     builder.add_node("debate", debate_node)
     builder.add_node("save", save_node)
     builder.add_node("evaluate", evaluate_node)
+    builder.add_node("tool_use", tool_use_node)
 
     builder.set_entry_point("retrieve")
     builder.add_edge("retrieve", "summarize")
-    builder.add_edge("summarize", "cross_domain")
+    builder.add_edge("summarize", "tool_use")
+    builder.add_edge("tool_use", "cross_domain")
     builder.add_edge("cross_domain", "contradiction")
     builder.add_edge("contradiction", "hypothesis")
     builder.add_edge("hypothesis", "critique")

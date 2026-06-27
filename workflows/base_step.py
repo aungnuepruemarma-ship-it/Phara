@@ -28,6 +28,9 @@ class ResearchState(TypedDict, total=False):
     kg_entities_created: list[str]
     enable_evaluation: bool
     evaluation_score: float | None
+    # Sprint 5: tool broker
+    enabled_tools: list[str]
+    tool_results: list[dict]
 
 
 @dataclass

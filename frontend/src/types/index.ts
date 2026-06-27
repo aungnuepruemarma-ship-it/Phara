@@ -93,6 +93,21 @@ export interface ContradictionItem {
   severity: "high" | "medium" | "low";
 }
 
+export interface ToolSpec {
+  name: string;
+  description: string;
+  category: "research" | "memory" | "analysis" | "utility";
+  input_schema: Record<string, unknown>;
+}
+
+export interface ToolResult {
+  tool_name: string;
+  success: boolean;
+  output: unknown;
+  error: string | null;
+  elapsed_ms: number;
+}
+
 export interface WorkflowResult {
   hypothesis: Hypothesis;
   evidence_summary: string;
@@ -101,6 +116,7 @@ export interface WorkflowResult {
   critique: DebateEntry | null;
   contradictions: ContradictionItem[];
   mlflow_run_id: string | null;
+  tool_results: ToolResult[];
 }
 
 export interface ProjectReport {

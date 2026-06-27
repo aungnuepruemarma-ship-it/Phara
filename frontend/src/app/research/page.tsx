@@ -3,8 +3,38 @@ import { useEffect, useState } from "react";
 import AuthGuard from "@/components/layout/AuthGuard";
 import Sidebar from "@/components/layout/Sidebar";
 import api from "@/lib/api";
-import type { Project, Experiment, WorkflowResult, DebateEntry, ContradictionItem } from "@/types";
+import type { Project, Experiment, WorkflowResult, DebateEntry, ContradictionItem, ToolSpec, ToolResult } from "@/types";
 import ReactMarkdown from "react-markdown";
+
+const CATEGORY_ORDER = ["research", "memory", "analysis", "utility"];
+
+function ToolResultCard({ result }: { result: ToolResult }) {
+  const [open, setOpen] = useState(false);
+  const preview = result.output
+    ? JSON.stringify(result.output).slice(0, 120) + (JSON.stringify(result.output).length > 120 ? "…" : "")
+    : "";
+  return (
+    <div className="bg-surface-3 rounded-lg p-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className={`w-2 h-2 rounded-full ${result.success ? "bg-green-400" : "bg-red-400"}`} />
+          <span className="text-sm font-medium text-white">{result.tool_name}</span>
+          <span className="text-xs text-slate-500">{result.elapsed_ms.toFixed(0)}ms</span>
+        </div>
+        {result.output && (
+          <button onClick={() => setOpen(!open)} className="text-xs text-slate-400 hover:text-white">{open ? "hide" : "show"}</button>
+        )}
+      </div>
+      {result.error && <p className="text-xs text-red-400 mt-1">{result.error}</p>}
+      {open && result.output && (
+        <pre className="mt-2 text-xs text-slate-300 overflow-x-auto whitespace-pre-wrap">
+          {JSON.stringify(result.output, null, 2).slice(0, 2000)}
+        </pre>
+      )}
+      {!open && preview && <p className="text-xs text-slate-500 mt-1 truncate">{preview}</p>}
+    </div>
+  );
+}
 
 const severityColor: Record<string, string> = {
   high: "border-red-700 text-red-300",
@@ -67,6 +97,8 @@ export default function ResearchPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [experiments, setExperiments] = useState<Experiment[]>([]);
   const [agents, setAgents] = useState<{ name: string; description: string }[]>([]);
+  const [availableTools, setAvailableTools] = useState<ToolSpec[]>([]);
+  const [showTools, setShowTools] = useState(false);
   const [form, setForm] = useState({
     question: "",
     project_id: "",
@@ -75,6 +107,7 @@ export default function ResearchPage() {
     enable_debate: false,
     enable_critique: false,
     enable_contradiction_check: false,
+    enabled_tools: [] as string[],
   });
   const [result, setResult] = useState<WorkflowResult | null>(null);
   const [running, setRunning] = useState(false);
@@ -83,6 +116,7 @@ export default function ResearchPage() {
   useEffect(() => {
     api.get("/projects").then((r) => setProjects(r.data));
     api.get("/research/agents").then((r) => setAgents(r.data));
+    api.get("/tools").then((r) => setAvailableTools(r.data)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -183,6 +217,46 @@ export default function ResearchPage() {
               </label>
             </div>
 
+            {availableTools.length > 0 && (
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowTools(!showTools)}
+                  className="text-sm text-slate-400 hover:text-slate-300 flex items-center gap-1"
+                >
+                  <span>{showTools ? "▾" : "▸"}</span>
+                  Tools ({form.enabled_tools.length} selected)
+                </button>
+                {showTools && (
+                  <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {CATEGORY_ORDER.flatMap((cat) =>
+                      availableTools
+                        .filter((t) => t.category === cat)
+                        .map((tool) => (
+                          <label key={tool.name} className="flex items-start gap-2 cursor-pointer bg-surface-3 rounded-lg p-2.5 hover:bg-surface-2 transition-colors">
+                            <input
+                              type="checkbox"
+                              className="mt-0.5 accent-primary-500"
+                              checked={form.enabled_tools.includes(tool.name)}
+                              onChange={(e) => {
+                                const updated = e.target.checked
+                                  ? [...form.enabled_tools, tool.name]
+                                  : form.enabled_tools.filter((n) => n !== tool.name);
+                                setForm({ ...form, enabled_tools: updated });
+                              }}
+                            />
+                            <div>
+                              <p className="text-xs font-medium text-white">{tool.name}</p>
+                              <p className="text-xs text-slate-500">{tool.description.slice(0, 80)}…</p>
+                            </div>
+                          </label>
+                        ))
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {error && <p className="text-red-400 text-sm">{error}</p>}
 
             <button type="submit" disabled={running} className="bg-primary-600 hover:bg-primary-700 text-white px-6 py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50">
@@ -225,6 +299,17 @@ export default function ResearchPage() {
                   </h2>
                   <div className="space-y-3">
                     {result.contradictions.map((c, i) => <ContradictionCard key={i} item={c} index={i} />)}
+                  </div>
+                </div>
+              )}
+
+              {result.tool_results && result.tool_results.length > 0 && (
+                <div className="bg-surface-2 border border-surface-3 rounded-xl p-6">
+                  <h2 className="text-lg font-semibold text-white mb-3">
+                    Tools Used <span className="text-sm font-normal text-slate-400">({result.tool_results.length})</span>
+                  </h2>
+                  <div className="space-y-2">
+                    {result.tool_results.map((tr, i) => <ToolResultCard key={i} result={tr} />)}
                   </div>
                 </div>
               )}
