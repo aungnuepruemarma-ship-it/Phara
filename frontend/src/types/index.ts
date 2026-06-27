@@ -109,7 +109,7 @@ export interface ToolSpec {
 export interface ToolResult {
   tool_name: string;
   success: boolean;
-  output: unknown;
+  output: any;
   error: string | null;
   elapsed_ms: number;
 }
