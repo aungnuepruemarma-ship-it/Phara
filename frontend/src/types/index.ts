@@ -260,7 +260,7 @@ export interface SimulationOut {
   question: string;
   status: "pending" | "running" | "completed" | "failed";
   best_variant: string | null;
-  summary: Record<string, { mean: number; std: number; runs: number }> | null;
+  summary: Record<string, { mean: number; std: number; runs: number } | string> | null;
   variant_results: VariantResultOut[];
   created_at: string;
   updated_at: string;
