@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 
-import httpx
 
 try:
     from app.config import settings as _settings
@@ -59,8 +58,7 @@ def _parse(text: str) -> list[ExtractedEntity]:
 
 async def extract_entities(text: str, context: str = "") -> list[ExtractedEntity]:
     """Extract named entities from a research question or hypothesis text."""
-    if not _settings or not _settings.llm_api_key:
-        return _heuristic_extract(text)
+    from agents.llm_client import acall_llm
 
     user_prompt = f"Text: {text}"
     if context:
@@ -72,24 +70,16 @@ async def extract_entities(text: str, context: str = "") -> list[ExtractedEntity
     )
 
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(
-                f"{_settings.llm_base_url}/chat/completions",
-                headers={"Authorization": f"Bearer {_settings.llm_api_key}"},
-                json={
-                    "model": _settings.llm_model,
-                    "messages": [
-                        {"role": "system", "content": _SYSTEM},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    "temperature": 0.1,
-                },
-            )
-            resp.raise_for_status()
-            content = resp.json()["choices"][0]["message"]["content"]
-        return _parse(content) or _heuristic_extract(text)
+        content = await acall_llm(
+            [{"role": "system", "content": _SYSTEM}, {"role": "user", "content": user_prompt}],
+            temperature=0.1,
+            timeout=60,
+        )
+        if content:
+            return _parse(content) or _heuristic_extract(text)
     except Exception:
-        return _heuristic_extract(text)
+        pass
+    return _heuristic_extract(text)
 
 
 def _heuristic_extract(text: str) -> list[ExtractedEntity]:

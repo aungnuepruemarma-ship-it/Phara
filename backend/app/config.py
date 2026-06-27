@@ -28,9 +28,28 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60
 
     # ── LLM ──────────────────────────────────────────────────────────────────
+    # Option A (OpenAI / any OpenAI-compatible provider):
+    #   LLM_API_KEY=sk-...  LLM_BASE_URL=https://api.openai.com/v1  LLM_MODEL=gpt-4o-mini
+    # Option B (HF Serverless Inference — free, rate-limited, no quota needed):
+    #   HF_TOKEN=hf_...  (auto-available in HF Spaces; set as a Secret)
     llm_api_key: str = ""
     llm_base_url: str = "https://api.openai.com/v1"
     llm_model: str = "gpt-4o-mini"
+    hf_token: str = ""
+    hf_llm_model: str = "meta-llama/Llama-3.1-8B-Instruct"
+
+    @property
+    def llm_credentials(self) -> tuple[str, str, str] | None:
+        """Returns (base_url, api_key, model) or None when no LLM is configured."""
+        if self.llm_api_key:
+            return (self.llm_base_url, self.llm_api_key, self.llm_model)
+        if self.hf_token:
+            return (
+                "https://router.huggingface.co/v1",
+                self.hf_token,
+                self.hf_llm_model,
+            )
+        return None
 
     # ── File Storage — Cloudflare R2 (S3-compatible) ─────────────────────────
     # Stage 1: set USE_R2_STORAGE=true + all R2_* vars to store PDFs in R2

@@ -15,7 +15,6 @@ from __future__ import annotations
 import json
 import re
 
-import httpx
 
 try:
     from app.config import settings as _settings
@@ -45,7 +44,7 @@ async def score_hypothesis(
     prior_hypotheses: list[str] | None = None,
 ) -> EvaluationRubric:
     """Score a hypothesis on all five dimensions. Graceful fallback to heuristics."""
-    if _settings and _settings.llm_api_key:
+    if _settings and _settings.llm_credentials:
         try:
             return await _llm_score(
                 hypothesis_text, question, evidence_summary,
@@ -85,21 +84,14 @@ async def _llm_score(
         f"{prior_blurb}{cd_blurb}"
     )
 
-    async with httpx.AsyncClient(timeout=40) as client:
-        resp = await client.post(
-            f"{_settings.llm_base_url}/chat/completions",
-            headers={"Authorization": f"Bearer {_settings.llm_api_key}"},
-            json={
-                "model": _settings.llm_model,
-                "messages": [
-                    {"role": "system", "content": _SYSTEM},
-                    {"role": "user", "content": user_prompt},
-                ],
-                "temperature": 0.1,
-            },
-        )
-        resp.raise_for_status()
-        content = resp.json()["choices"][0]["message"]["content"]
+    from agents.llm_client import acall_llm
+    content = await acall_llm(
+        [{"role": "system", "content": _SYSTEM}, {"role": "user", "content": user_prompt}],
+        temperature=0.1,
+        timeout=60,
+    )
+    if not content:
+        raise ValueError("No LLM configured")
 
     start = content.find("{")
     end = content.rfind("}") + 1

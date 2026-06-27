@@ -39,20 +39,22 @@ class LLMAgent(BaseAgent):
 
     def _no_llm_response(self) -> dict:
         return {
-            "hypothesis": "No LLM configured. Set LLM_API_KEY in environment to enable hypothesis generation.",
+            "hypothesis": "No LLM configured. Set LLM_API_KEY (OpenAI) or HF_TOKEN (free HF Inference) in environment.",
             "reasoning": "LLM not available.",
             "confidence": 0.0,
         }
 
     def _call_llm(self, system: str, user: str) -> dict:
-        if not _settings or not _settings.llm_api_key:
+        creds = _settings.llm_credentials if _settings else None
+        if not creds:
             return self._no_llm_response()
-        with httpx.Client(timeout=60) as client:
+        base_url, api_key, model = creds
+        with httpx.Client(timeout=90) as client:
             resp = client.post(
-                f"{_settings.llm_base_url}/chat/completions",
-                headers={"Authorization": f"Bearer {_settings.llm_api_key}"},
+                f"{base_url}/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}"},
                 json={
-                    "model": _settings.llm_model,
+                    "model": model,
                     "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
                     "temperature": self.temperature,
                 },
@@ -62,14 +64,16 @@ class LLMAgent(BaseAgent):
         return self._parse_response(content)
 
     async def _acall_llm(self, system: str, user: str) -> dict:
-        if not _settings or not _settings.llm_api_key:
+        creds = _settings.llm_credentials if _settings else None
+        if not creds:
             return self._no_llm_response()
-        async with httpx.AsyncClient(timeout=60) as client:
+        base_url, api_key, model = creds
+        async with httpx.AsyncClient(timeout=90) as client:
             resp = await client.post(
-                f"{_settings.llm_base_url}/chat/completions",
-                headers={"Authorization": f"Bearer {_settings.llm_api_key}"},
+                f"{base_url}/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}"},
                 json={
-                    "model": _settings.llm_model,
+                    "model": model,
                     "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
                     "temperature": self.temperature,
                 },

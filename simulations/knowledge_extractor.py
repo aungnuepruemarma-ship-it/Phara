@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 import uuid
 
-import httpx
 
 from simulations.types import SimulationResult
 
@@ -45,15 +44,15 @@ async def extract_simulation_lessons(result: SimulationResult, project_id: str) 
 
 
 async def _generate_lessons(result: SimulationResult) -> list[str]:
-    if _settings and _settings.llm_api_key:
-        try:
-            return await _llm_lessons(result)
-        except Exception:
-            pass
+    try:
+        return await _llm_lessons(result)
+    except Exception:
+        pass
     return _heuristic_lessons(result)
 
 
 async def _llm_lessons(result: SimulationResult) -> list[str]:
+    from agents.llm_client import acall_llm
     prompt = (
         "You are analyzing a completed research simulation. "
         "Extract exactly 3 concise, actionable lessons learned.\n\n"
@@ -64,19 +63,9 @@ async def _llm_lessons(result: SimulationResult) -> list[str]:
         "Return ONLY a JSON array of 3 lesson strings. "
         'Example: ["Lesson 1", "Lesson 2", "Lesson 3"]'
     )
-
-    async with httpx.AsyncClient(timeout=20) as client:
-        resp = await client.post(
-            f"{_settings.llm_base_url}/chat/completions",
-            headers={"Authorization": f"Bearer {_settings.llm_api_key}"},
-            json={
-                "model": getattr(_settings, "llm_model", "gpt-4o-mini"),
-                "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 300,
-                "temperature": 0.3,
-            },
-        )
-    text = resp.json()["choices"][0]["message"]["content"].strip()
+    text = await acall_llm([{"role": "user", "content": prompt}], temperature=0.3, timeout=30)
+    if not text:
+        raise ValueError("No LLM configured")
     start, end = text.find("["), text.rfind("]") + 1
     if start >= 0 and end > start:
         parsed = json.loads(text[start:end])

@@ -11,7 +11,6 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-import httpx
 
 try:
     from app.config import settings as _settings
@@ -40,8 +39,7 @@ class AnalogyMatch:
 
 async def _verify_analogy(source: str, source_domain: str, target: str, target_domain: str) -> tuple[bool, str]:
     """Use LLM to confirm structural analogy between two concepts."""
-    if not _settings or not _settings.llm_api_key:
-        return False, ""
+    from agents.llm_client import acall_llm
     try:
         user_prompt = (
             f"Source concept ({source_domain}): {source}\n"
@@ -49,21 +47,12 @@ async def _verify_analogy(source: str, source_domain: str, target: str, target_d
             "Is there a genuine structural analogy between these two concepts? "
             'Respond with JSON: {"is_analogy": true/false, "explanation": "...", "confidence": 0.0-1.0}'
         )
-        async with httpx.AsyncClient(timeout=20) as client:
-            resp = await client.post(
-                f"{_settings.llm_base_url}/chat/completions",
-                headers={"Authorization": f"Bearer {_settings.llm_api_key}"},
-                json={
-                    "model": _settings.llm_model,
-                    "messages": [
-                        {"role": "system", "content": _VERIFY_SYSTEM},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    "temperature": 0.2,
-                },
-            )
-            resp.raise_for_status()
-            text = resp.json()["choices"][0]["message"]["content"]
+        text = await acall_llm(
+            [{"role": "system", "content": _VERIFY_SYSTEM}, {"role": "user", "content": user_prompt}],
+            temperature=0.2,
+            timeout=30,
+        )
+        if text:
             start = text.find("{")
             end = text.rfind("}") + 1
             if start >= 0 and end > start:

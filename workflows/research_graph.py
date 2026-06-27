@@ -245,15 +245,6 @@ def _heuristic_select_tools(question: str) -> list[str]:
 async def _llm_select_tools(question: str, heuristic_picks: list[str]) -> list[str]:
     """Ask the LLM to refine/replace the heuristic tool list. Returns [] on any failure."""
     import json
-    import httpx
-
-    try:
-        from app.config import settings as _s
-    except ImportError:
-        return []
-    if not _s or not _s.llm_api_key:
-        return []
-
     import sys
     from pathlib import Path
     _root = str(Path(__file__).resolve().parents[1])
@@ -262,6 +253,8 @@ async def _llm_select_tools(question: str, heuristic_picks: list[str]) -> list[s
 
     import tools.builtin_tools  # noqa: F401
     from tools.tool_registry import list_tools
+    from agents.llm_client import acall_llm
+
     all_tools = [t.name for t in list_tools()]
 
     tool_descriptions = "\n".join(
@@ -278,27 +271,15 @@ async def _llm_select_tools(question: str, heuristic_picks: list[str]) -> list[s
     )
 
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.post(
-                f"{_s.llm_base_url}/chat/completions",
-                headers={"Authorization": f"Bearer {_s.llm_api_key}"},
-                json={
-                    "model": _s.llm_model,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.0,
-                    "max_tokens": 100,
-                },
-            )
-            resp.raise_for_status()
-            content = resp.json()["choices"][0]["message"]["content"]
-
-        start = content.find("[")
-        end = content.rfind("]") + 1
-        if start >= 0 and end > start:
-            names: list[str] = json.loads(content[start:end])
-            valid = [n for n in names if n in set(all_tools)]
-            if valid:
-                return valid[:5]
+        content = await acall_llm([{"role": "user", "content": prompt}], temperature=0.0, timeout=20)
+        if content:
+            start = content.find("[")
+            end = content.rfind("]") + 1
+            if start >= 0 and end > start:
+                names: list[str] = json.loads(content[start:end])
+                valid = [n for n in names if n in set(all_tools)]
+                if valid:
+                    return valid[:5]
     except Exception:
         pass
 

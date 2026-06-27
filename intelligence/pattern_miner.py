@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 
-import httpx
 
 try:
     from app.config import settings as _settings
@@ -65,8 +64,8 @@ async def mine_patterns(hypothesis_texts: list[str]) -> list[DomainPattern]:
     """Find cross-domain structural patterns in a set of hypothesis texts."""
     if len(hypothesis_texts) < 2:
         return []
-    if not _settings or not _settings.llm_api_key:
-        return []
+
+    from agents.llm_client import acall_llm
 
     items = "\n".join(f"[{i+1}] {h[:300]}" for i, h in enumerate(hypothesis_texts[:20]))
     user_prompt = (
@@ -78,20 +77,13 @@ async def mine_patterns(hypothesis_texts: list[str]) -> list[DomainPattern]:
     )
 
     try:
-        async with httpx.AsyncClient(timeout=45) as client:
-            resp = await client.post(
-                f"{_settings.llm_base_url}/chat/completions",
-                headers={"Authorization": f"Bearer {_settings.llm_api_key}"},
-                json={
-                    "model": _settings.llm_model,
-                    "messages": [
-                        {"role": "system", "content": _SYSTEM},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    "temperature": 0.3,
-                },
-            )
-            resp.raise_for_status()
-            return _parse(resp.json()["choices"][0]["message"]["content"])
+        content = await acall_llm(
+            [{"role": "system", "content": _SYSTEM}, {"role": "user", "content": user_prompt}],
+            temperature=0.3,
+            timeout=60,
+        )
+        if content:
+            return _parse(content)
     except Exception:
-        return []
+        pass
+    return []
