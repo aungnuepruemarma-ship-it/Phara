@@ -8,6 +8,8 @@ from app.config import settings
 
 @lru_cache(maxsize=1)
 def get_qdrant_client() -> QdrantClient:
+    if settings.qdrant_in_memory:
+        return QdrantClient(":memory:")
     return QdrantClient(host=settings.qdrant_host, port=settings.qdrant_port)
 
 

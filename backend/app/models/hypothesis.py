@@ -2,8 +2,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Float, ForeignKey, String, Text, func
-from sqlalchemy.dialects.postgresql import ARRAY, UUID
+from sqlalchemy import DateTime, Float, ForeignKey, JSON, String, Text, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -15,10 +14,10 @@ if TYPE_CHECKING:
 class Hypothesis(Base):
     __tablename__ = "hypotheses"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    experiment_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("experiments.id"), nullable=False)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    experiment_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("experiments.id"), nullable=False)
     question: Mapped[str] = mapped_column(Text, nullable=False)
-    retrieved_paper_ids: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
+    retrieved_paper_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
     evidence_summary: Mapped[str] = mapped_column(Text, default="")
     hypothesis_text: Mapped[str] = mapped_column(Text, nullable=False)
     agent_used: Mapped[str] = mapped_column(String(100), nullable=False)

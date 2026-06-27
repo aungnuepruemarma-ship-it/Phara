@@ -2,8 +2,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, func
-from sqlalchemy.dialects.postgresql import ARRAY, UUID
+from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -15,10 +14,10 @@ if TYPE_CHECKING:
 class Paper(Base):
     __tablename__ = "papers"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    project_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id"), nullable=False)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("projects.id"), nullable=False)
     title: Mapped[str] = mapped_column(String(500), nullable=False)
-    authors: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
+    authors: Mapped[list[str]] = mapped_column(JSON, default=list)
     abstract: Mapped[str | None] = mapped_column(String(5000))
     year: Mapped[int | None] = mapped_column(Integer)
     doi: Mapped[str | None] = mapped_column(String(255))

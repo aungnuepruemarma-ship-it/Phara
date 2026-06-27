@@ -4,10 +4,17 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
+    # Database — set USE_SQLITE=true on HF Spaces
     database_url: str = "postgresql+asyncpg://phara:changeme@localhost:5432/pharalab"
+    use_sqlite: bool = False
+    sqlite_path: str = "/data/lab.db"
+
     redis_url: str = "redis://localhost:6379/0"
+
+    # Qdrant — set QDRANT_IN_MEMORY=true on HF Spaces
     qdrant_host: str = "localhost"
     qdrant_port: int = 6333
+    qdrant_in_memory: bool = False
 
     secret_key: str = "dev-secret-key-change-in-production"
     algorithm: str = "HS256"
