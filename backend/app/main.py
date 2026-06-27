@@ -44,8 +44,9 @@ app.include_router(hypotheses.router, prefix=API_PREFIX)
 
 
 @app.get("/health")
+@app.get("/api/v1/health")
 async def health():
-    return {"status": "ok"}
+    return {"status": "ok", "version": "1.0.0"}
 
 
 @app.on_event("startup")

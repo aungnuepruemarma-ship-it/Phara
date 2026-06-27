@@ -1,0 +1,44 @@
+services:
+  - type: web
+    name: uil-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
+    healthCheckPath: /api/v1/health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        sync: false          # set in Render dashboard — Supabase connection string
+      - key: REDIS_URL
+        sync: false          # set in Render dashboard — Upstash Redis URL
+      - key: QDRANT_HOST
+        sync: false          # e.g. xyz.us-east-1.aws.cloud.qdrant.io
+      - key: QDRANT_PORT
+        value: "6333"
+      - key: QDRANT_API_KEY
+        sync: false          # Qdrant Cloud API key
+      - key: SECRET_KEY
+        generateValue: true
+      - key: LLM_API_KEY
+        sync: false
+      - key: LLM_BASE_URL
+        value: "https://api.openai.com/v1"
+      - key: LLM_MODEL
+        value: "gpt-4o-mini"
+      - key: UPLOAD_DIR
+        value: "/tmp/uploads"
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET_NAME
+        sync: false
+      - key: USE_R2_STORAGE
+        value: "false"       # set true once R2 bucket is created
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "60"
+      - key: PYTHON_VERSION
+        value: "3.12.0"

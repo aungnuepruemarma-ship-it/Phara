@@ -10,7 +10,11 @@ from app.config import settings
 def get_qdrant_client() -> QdrantClient:
     if settings.qdrant_in_memory:
         return QdrantClient(":memory:")
-    return QdrantClient(host=settings.qdrant_host, port=settings.qdrant_port)
+    kwargs: dict = {"host": settings.qdrant_host, "port": settings.qdrant_port}
+    if settings.qdrant_api_key:
+        kwargs["api_key"] = settings.qdrant_api_key
+        kwargs["https"] = True   # Qdrant Cloud requires TLS
+    return QdrantClient(**kwargs)
 
 
 def ensure_collection(collection_name: str, vector_size: int = None) -> None:
