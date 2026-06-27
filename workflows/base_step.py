@@ -21,6 +21,11 @@ class PipelineContext:
     critique: AgentOutput | None = None
     enable_debate: bool = False
     enable_critique: bool = False
+    # Phase 5: contradiction detection
+    contradictions: list[dict] = field(default_factory=list)
+    enable_contradiction_check: bool = False
+    # MLflow run id (set after logging)
+    mlflow_run_id: str | None = None
 
 
 class BaseWorkflowStep(ABC):

@@ -12,6 +12,7 @@ class WorkflowRequest(BaseModel):
     agent_name: str = "math_research_agent"
     enable_debate: bool = False
     enable_critique: bool = False
+    enable_contradiction_check: bool = False
 
 
 class DebateEntry(BaseModel):
@@ -21,9 +22,20 @@ class DebateEntry(BaseModel):
     confidence: float
 
 
+class ContradictionItem(BaseModel):
+    claim_a: str
+    source_a: int
+    claim_b: str
+    source_b: int
+    explanation: str
+    severity: str
+
+
 class WorkflowResult(BaseModel):
     hypothesis: HypothesisOut
     evidence_summary: str
     retrieved_paper_count: int
     debate: list[DebateEntry] = []
     critique: DebateEntry | None = None
+    contradictions: list[ContradictionItem] = []
+    mlflow_run_id: str | None = None

@@ -31,6 +31,8 @@ export default function ProjectDetail() {
     { href: `/projects/${id}/papers`, label: "Papers", count: summary.paper_count },
     { href: `/projects/${id}/experiments`, label: "Experiments", count: summary.experiment_count },
     { href: `/projects/${id}/notes`, label: "Notes", count: summary.note_count },
+    { href: `/projects/${id}/report`, label: "Report", count: null },
+    { href: `/projects/${id}/tracking`, label: "Tracking", count: null },
   ];
 
   return (
@@ -51,14 +53,16 @@ export default function ProjectDetail() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-8">
             {tabs.map((tab) => (
               <Link
                 key={tab.href}
                 href={tab.href}
                 className="bg-surface-2 border border-surface-3 hover:border-primary-500 rounded-xl p-5 transition-colors"
               >
-                <p className="text-3xl font-bold text-white">{tab.count}</p>
+                {tab.count !== null
+                  ? <p className="text-3xl font-bold text-white">{tab.count}</p>
+                  : <p className="text-3xl font-bold text-primary-400">→</p>}
                 <p className="text-slate-400 text-sm mt-1">{tab.label}</p>
               </Link>
             ))}

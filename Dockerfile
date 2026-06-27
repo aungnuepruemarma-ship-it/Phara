@@ -34,6 +34,7 @@ COPY agents/ ./agents/
 COPY workflows/ ./workflows/
 COPY memory/ ./memory/
 COPY tools/ ./tools/
+COPY tracking/ ./tracking/
 
 # Built frontend
 COPY --from=frontend-builder /frontend/out ./frontend/out
@@ -41,7 +42,7 @@ COPY --from=frontend-builder /frontend/out ./frontend/out
 # Persistent data directory (HF Spaces mounts /data)
 RUN mkdir -p /data /app/uploads
 
-ENV PYTHONPATH=/app/backend
+ENV PYTHONPATH=/app/backend:/app
 ENV USE_SQLITE=true
 ENV QDRANT_IN_MEMORY=true
 ENV UPLOAD_DIR=/app/uploads

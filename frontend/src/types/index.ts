@@ -84,10 +84,49 @@ export interface DebateEntry {
   confidence: number;
 }
 
+export interface ContradictionItem {
+  claim_a: string;
+  source_a: number;
+  claim_b: string;
+  source_b: number;
+  explanation: string;
+  severity: "high" | "medium" | "low";
+}
+
 export interface WorkflowResult {
   hypothesis: Hypothesis;
   evidence_summary: string;
   retrieved_paper_count: number;
   debate: DebateEntry[];
   critique: DebateEntry | null;
+  contradictions: ContradictionItem[];
+  mlflow_run_id: string | null;
+}
+
+export interface ProjectReport {
+  project_id: string;
+  project_name: string;
+  generated_at: string;
+  experiment_count: number;
+  hypothesis_count: number;
+  hypotheses: {
+    id: string;
+    question: string;
+    hypothesis_text: string;
+    agent_used: string;
+    confidence_score: number | null;
+    created_at: string;
+  }[];
+  synthesis: string;
+  top_agents: string[];
+  avg_confidence: number | null;
+}
+
+export interface TrackingRun {
+  run_id: string;
+  start_time: string | null;
+  status: string | null;
+  params: Record<string, string>;
+  metrics: Record<string, number>;
+  tags: Record<string, string>;
 }

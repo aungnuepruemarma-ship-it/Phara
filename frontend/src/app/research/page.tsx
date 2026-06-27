@@ -3,8 +3,36 @@ import { useEffect, useState } from "react";
 import AuthGuard from "@/components/layout/AuthGuard";
 import Sidebar from "@/components/layout/Sidebar";
 import api from "@/lib/api";
-import type { Project, Experiment, WorkflowResult, DebateEntry } from "@/types";
+import type { Project, Experiment, WorkflowResult, DebateEntry, ContradictionItem } from "@/types";
 import ReactMarkdown from "react-markdown";
+
+const severityColor: Record<string, string> = {
+  high: "border-red-700 text-red-300",
+  medium: "border-amber-700 text-amber-300",
+  low: "border-slate-600 text-slate-400",
+};
+
+function ContradictionCard({ item, index }: { item: ContradictionItem; index: number }) {
+  return (
+    <div className={`border rounded-xl p-4 ${severityColor[item.severity] || severityColor.low}`}>
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-xs font-semibold uppercase tracking-wide">Contradiction {index + 1}</span>
+        <span className={`text-xs px-2 py-0.5 rounded border ${severityColor[item.severity]}`}>{item.severity}</span>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+        <div className="bg-surface-3 rounded-lg p-3">
+          <p className="text-xs text-slate-500 mb-1">Source [{item.source_a}]</p>
+          <p className="text-slate-200">{item.claim_a}</p>
+        </div>
+        <div className="bg-surface-3 rounded-lg p-3">
+          <p className="text-xs text-slate-500 mb-1">Source [{item.source_b}]</p>
+          <p className="text-slate-200">{item.claim_b}</p>
+        </div>
+      </div>
+      {item.explanation && <p className="text-xs text-slate-400 mt-2">{item.explanation}</p>}
+    </div>
+  );
+}
 
 function DebateCard({ entry, label }: { entry: DebateEntry; label: string }) {
   const [open, setOpen] = useState(false);
@@ -46,6 +74,7 @@ export default function ResearchPage() {
     agent_name: "math_research_agent",
     enable_debate: false,
     enable_critique: false,
+    enable_contradiction_check: false,
   });
   const [result, setResult] = useState<WorkflowResult | null>(null);
   const [running, setRunning] = useState(false);
@@ -143,6 +172,15 @@ export default function ResearchPage() {
                 />
                 <span className="text-sm text-slate-300">Enable Debate</span>
               </label>
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={form.enable_contradiction_check}
+                  onChange={(e) => setForm({ ...form, enable_contradiction_check: e.target.checked })}
+                  className="w-4 h-4 accent-primary-500"
+                />
+                <span className="text-sm text-slate-300">Detect Contradictions</span>
+              </label>
             </div>
 
             {error && <p className="text-red-400 text-sm">{error}</p>}
@@ -159,6 +197,7 @@ export default function ResearchPage() {
                 <p className="text-xs text-slate-400 mb-4">
                   Agent: {result.hypothesis.agent_used} · {result.retrieved_paper_count} papers retrieved
                   {result.hypothesis.confidence_score !== null && ` · ${(result.hypothesis.confidence_score * 100).toFixed(0)}% confidence`}
+                  {result.mlflow_run_id && <span className="ml-2 bg-surface-3 px-2 py-0.5 rounded font-mono">MLflow: {result.mlflow_run_id.slice(0, 8)}</span>}
                 </p>
                 <div className="prose prose-invert prose-sm max-w-none">
                   <ReactMarkdown>{result.hypothesis.hypothesis_text}</ReactMarkdown>
@@ -176,6 +215,17 @@ export default function ResearchPage() {
                 <div className="bg-surface-2 border border-surface-3 rounded-xl p-6">
                   <h2 className="text-lg font-semibold text-white mb-4">Critique</h2>
                   <DebateCard entry={result.critique} label="Critic Review" />
+                </div>
+              )}
+
+              {result.contradictions.length > 0 && (
+                <div className="bg-surface-2 border border-surface-3 rounded-xl p-6">
+                  <h2 className="text-lg font-semibold text-white mb-4">
+                    Contradictions Detected <span className="text-sm font-normal text-slate-400">({result.contradictions.length})</span>
+                  </h2>
+                  <div className="space-y-3">
+                    {result.contradictions.map((c, i) => <ContradictionCard key={i} item={c} index={i} />)}
+                  </div>
                 </div>
               )}
 
