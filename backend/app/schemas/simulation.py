@@ -13,10 +13,26 @@ class SimulationVariantIn(BaseModel):
     enable_debate: bool = False
     enable_critique: bool = False
     enable_contradiction_check: bool = False
+    # Sprint 6: ablation framework
+    ablate_retrieval: bool = False
+    ablate_memory: bool = False
+    ablate_kg: bool = False
+    ablate_tools: bool = False
+    adversarial_context: list[str] = []
+    retrieval_top_k: int | None = None
 
 
 class SimulationRequest(BaseModel):
-    simulation_type: Literal["agent_sweep", "parameter_sweep", "stability_test"]
+    simulation_type: Literal[
+        # Sweep types
+        "agent_sweep", "parameter_sweep", "stability_test",
+        "hypothesis_sweep", "debate_simulation", "cross_domain_transfer",
+        # Ablation types
+        "retrieval_ablation", "memory_ablation", "kg_ablation", "tool_ablation",
+        # Advanced types
+        "adversarial_simulation", "time_evolution", "human_loop",
+        "cost_optimization", "scaling_simulation",
+    ]
     question: str
     experiment_id: str | None = None
     variants: list[SimulationVariantIn] = Field(min_length=1)
@@ -32,6 +48,7 @@ class VariantResultOut(BaseModel):
     evaluation_score: float | None
     verdict: str | None
     dimension_scores: list[dict]
+    full_state: dict | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

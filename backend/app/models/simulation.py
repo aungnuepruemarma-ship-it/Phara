@@ -55,6 +55,7 @@ class SimulationVariantResult(Base):
     evaluation_score: Mapped[float | None] = mapped_column(Float)
     verdict: Mapped[str | None] = mapped_column(String(20))
     dimension_scores: Mapped[list] = mapped_column(JSON, default=list)
+    full_state: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     simulation: Mapped["Simulation"] = relationship("Simulation", back_populates="variant_results")

@@ -11,6 +11,35 @@ import app.services.simulation_service as svc
 router = APIRouter(tags=["simulations"])
 
 
+@router.get(
+    "/projects/{project_id}/simulation-knowledge",
+    response_model=list[dict],
+)
+async def get_simulation_knowledge(
+    project_id: str,
+    _current_user=Depends(get_current_user),
+):
+    """Return simulation lessons stored in the knowledge base for this project."""
+    try:
+        from memory.knowledge_memory import search_knowledge
+        entries = search_knowledge(
+            query="simulation lessons research workflow agent performance",
+            project_id=project_id,
+            top_k=30,
+            kind="simulation_lesson",
+        )
+        return [
+            {
+                "text": e.text,
+                "source_simulation_id": e.source_paper_id,
+                "score": round(e.score, 4),
+            }
+            for e in entries
+        ]
+    except Exception:
+        return []
+
+
 @router.post(
     "/projects/{project_id}/simulations",
     response_model=SimulationOut,
@@ -75,6 +104,7 @@ def _to_out(sim) -> SimulationOut:
                 evaluation_score=vr.evaluation_score,
                 verdict=vr.verdict,
                 dimension_scores=vr.dimension_scores or [],
+                full_state=vr.full_state,
                 created_at=vr.created_at,
             )
             for vr in (sim.variant_results or [])

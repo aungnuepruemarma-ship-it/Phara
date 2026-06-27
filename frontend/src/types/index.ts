@@ -217,6 +217,12 @@ export interface SimulationVariantIn {
   enable_debate: boolean;
   enable_critique: boolean;
   enable_contradiction_check: boolean;
+  ablate_retrieval: boolean;
+  ablate_memory: boolean;
+  ablate_kg: boolean;
+  ablate_tools: boolean;
+  adversarial_context: string[];
+  retrieval_top_k: number | null;
 }
 
 export interface SimulationRequest {
@@ -236,6 +242,7 @@ export interface VariantResultOut {
   evaluation_score: number | null;
   verdict: string | null;
   dimension_scores: { name: string; score: number; reasoning: string }[];
+  full_state: Record<string, unknown> | null;
   created_at: string;
 }
 

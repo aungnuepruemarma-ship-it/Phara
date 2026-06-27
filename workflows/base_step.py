@@ -31,6 +31,13 @@ class ResearchState(TypedDict, total=False):
     # Sprint 5: tool broker
     enabled_tools: list[str]
     tool_results: list[dict]
+    # Sprint 6: ablation framework
+    ablate_retrieval: bool
+    ablate_memory: bool
+    ablate_kg: bool
+    ablate_tools: bool
+    adversarial_context: list[str]
+    retrieval_top_k: int | None
 
 
 @dataclass

@@ -1,10 +1,18 @@
 """
 SimulationRunner — orchestrates multiple research_graph invocations for comparative analysis.
 
-Supports three simulation types:
-  agent_sweep      — same question, different agents
-  parameter_sweep  — same agent, vary workflow flags (debate/critique/contradiction)
-  stability_test   — same config repeated N times, measure score variance
+Supports all 15 simulation types:
+  Sweep:     agent_sweep, parameter_sweep, stability_test, hypothesis_sweep,
+             debate_simulation, cross_domain_transfer
+  Ablation:  retrieval_ablation, memory_ablation, kg_ablation, tool_ablation
+  Advanced:  adversarial_simulation, time_evolution, human_loop,
+             cost_optimization, scaling_simulation
+
+Sprint 6 additions:
+  - Ablation flags forwarded to ResearchState
+  - adversarial_context injected as misleading chunks
+  - full_state captured per variant run (simulation memory)
+  - extract_simulation_lessons() called after all runs complete
 """
 from __future__ import annotations
 
@@ -39,12 +47,22 @@ class SimulationRunner:
                     "contradictions": [],
                     "cross_domain_insights": [],
                     "kg_entities_created": [],
+                    "enabled_tools": [],
+                    "tool_results": [],
+                    # Sprint 6: ablation framework
+                    "ablate_retrieval": variant.ablate_retrieval,
+                    "ablate_memory": variant.ablate_memory,
+                    "ablate_kg": variant.ablate_kg,
+                    "ablate_tools": variant.ablate_tools,
+                    "adversarial_context": list(variant.adversarial_context),
+                    "retrieval_top_k": variant.retrieval_top_k,
                 }
 
                 hypothesis_id: str | None = None
                 eval_score: float | None = None
                 verdict: str | None = None
                 dimension_scores: list[dict] = []
+                full_state_capture: dict = {}
 
                 try:
                     if research_graph is not None:
@@ -54,7 +72,26 @@ class SimulationRunner:
                         )
                         hypothesis_id = final.get("saved_hypothesis_id")
                         eval_score = final.get("evaluation_score")
-                        # Pull dimension scores from DB if available
+
+                        # Sprint 6: capture full intermediate state (simulation memory)
+                        full_state_capture = {
+                            "retrieved_chunk_count": len(final.get("retrieved_chunks") or []),
+                            "retrieved_paper_ids": list(final.get("retrieved_paper_ids") or []),
+                            "kg_entities_created": list(final.get("kg_entities_created") or []),
+                            "cross_domain_insight_count": len(final.get("cross_domain_insights") or []),
+                            "contradiction_count": len(final.get("contradictions") or []),
+                            "tool_results": list(final.get("tool_results") or []),
+                            "ablation_flags": {
+                                "ablate_retrieval": variant.ablate_retrieval,
+                                "ablate_memory": variant.ablate_memory,
+                                "ablate_kg": variant.ablate_kg,
+                                "ablate_tools": variant.ablate_tools,
+                                "adversarial_context_count": len(variant.adversarial_context),
+                                "retrieval_top_k": variant.retrieval_top_k,
+                            },
+                            "evaluation_score": eval_score,
+                        }
+
                         if hypothesis_id:
                             dimension_scores = await _fetch_dimension_scores(db, hypothesis_id)
                             if verdict is None and eval_score is not None:
@@ -66,7 +103,6 @@ class SimulationRunner:
                                 else:
                                     verdict = "weak"
                     else:
-                        # LangGraph not available — run heuristic scorer directly
                         eval_score, verdict, dimension_scores = await _heuristic_fallback(
                             config.question, variant.agent_name
                         )
@@ -81,9 +117,19 @@ class SimulationRunner:
                     evaluation_score=eval_score,
                     verdict=verdict,
                     dimension_scores=dimension_scores,
+                    full_state=full_state_capture,
                 ))
 
-        return _aggregate(simulation_id, config, all_results)
+        result = _aggregate(simulation_id, config, all_results)
+
+        # Sprint 6: extract lessons and store in knowledge base (best-effort)
+        try:
+            from simulations.knowledge_extractor import extract_simulation_lessons
+            await extract_simulation_lessons(result, config.project_id)
+        except Exception:
+            pass
+
+        return result
 
 
 # ---------------------------------------------------------------------------

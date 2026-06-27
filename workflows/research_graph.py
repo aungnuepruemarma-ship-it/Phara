@@ -47,6 +47,13 @@ class ResearchState(TypedDict, total=False):
     # Sprint 5: tool broker
     enabled_tools: list[str]
     tool_results: list[dict]
+    # Sprint 6: ablation framework
+    ablate_retrieval: bool
+    ablate_memory: bool
+    ablate_kg: bool
+    ablate_tools: bool
+    adversarial_context: list[str]
+    retrieval_top_k: int | None
 
 
 # ---------------------------------------------------------------------------
@@ -54,13 +61,29 @@ class ResearchState(TypedDict, total=False):
 # ---------------------------------------------------------------------------
 
 async def retrieve_node(state: ResearchState, config: RunnableConfig | None = None) -> ResearchState:
+    adversarial = list(state.get("adversarial_context") or [])
+
+    if state.get("ablate_retrieval"):
+        # Ablation: skip paper retrieval; optionally inject adversarial chunks only
+        new_state = ResearchState(**state)
+        new_state["retrieved_chunks"] = adversarial
+        new_state["retrieved_paper_ids"] = []
+        new_state["evidence_summary"] = ""
+        return new_state
+
     from workflows.steps.retrieve_papers import RetrievePapersStep
     from app.config import settings
-    from workflows.base_step import PipelineContext
 
+    top_k = state.get("retrieval_top_k") or settings.retrieval_top_k
     ctx = _to_ctx(state)
-    ctx = await RetrievePapersStep(top_k=settings.retrieval_top_k).execute(ctx)
-    return _from_ctx(state, ctx)
+    ctx = await RetrievePapersStep(top_k=top_k).execute(ctx)
+    new_state = _from_ctx(state, ctx)
+
+    # Inject adversarial chunks after real retrieval (adversarial_simulation type)
+    if adversarial:
+        new_state["retrieved_chunks"] = list(new_state.get("retrieved_chunks") or []) + adversarial
+
+    return new_state
 
 
 async def summarize_node(state: ResearchState, config: RunnableConfig | None = None) -> ResearchState:
@@ -73,6 +96,8 @@ async def summarize_node(state: ResearchState, config: RunnableConfig | None = N
 
 
 async def cross_domain_node(state: ResearchState, config: RunnableConfig | None = None) -> ResearchState:
+    if state.get("ablate_kg"):
+        return state
     from intelligence.cross_domain_agent import cross_domain_node as _cdn
     updated = await _cdn(dict(state))
     return ResearchState(**updated)
@@ -122,9 +147,9 @@ async def save_node(state: ResearchState, config: RunnableConfig | None = None) 
     ctx = await SaveExperimentStep(db=db).execute(ctx)
     new_state = _from_ctx(state, ctx)
 
-    # Populate KG (best-effort)
+    # Populate KG (best-effort; skipped for kg ablation)
     kg_ids: list[str] = []
-    if ctx.saved_hypothesis_id:
+    if not state.get("ablate_kg") and ctx.saved_hypothesis_id:
         try:
             from sqlalchemy import select
             from app.models.hypothesis import Hypothesis

@@ -63,6 +63,12 @@ async def create_and_run_simulation(
                     enable_debate=v.enable_debate,
                     enable_critique=v.enable_critique,
                     enable_contradiction_check=v.enable_contradiction_check,
+                    ablate_retrieval=v.ablate_retrieval,
+                    ablate_memory=v.ablate_memory,
+                    ablate_kg=v.ablate_kg,
+                    ablate_tools=v.ablate_tools,
+                    adversarial_context=list(v.adversarial_context),
+                    retrieval_top_k=v.retrieval_top_k,
                 )
                 for v in req.variants
             ],
@@ -71,7 +77,7 @@ async def create_and_run_simulation(
 
         result = await SimulationRunner().run(config, db, str(sim_id))
 
-        # Persist variant results
+        # Persist variant results (including full_state simulation memory)
         for vr in result.variant_results:
             row = SimulationVariantResult(
                 simulation_id=sim_id,
@@ -82,6 +88,7 @@ async def create_and_run_simulation(
                 evaluation_score=vr.evaluation_score,
                 verdict=vr.verdict,
                 dimension_scores=vr.dimension_scores,
+                full_state=vr.full_state or None,
             )
             db.add(row)
 
