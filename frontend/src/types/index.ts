@@ -194,3 +194,45 @@ export interface EvaluationSummary {
   best_agent: string | null;
   score_trend: number[];
 }
+
+export interface SimulationVariantIn {
+  name: string;
+  agent_name: string;
+  enable_debate: boolean;
+  enable_critique: boolean;
+  enable_contradiction_check: boolean;
+}
+
+export interface SimulationRequest {
+  simulation_type: "agent_sweep" | "parameter_sweep" | "stability_test";
+  question: string;
+  experiment_id?: string;
+  variants: SimulationVariantIn[];
+  runs_per_variant: number;
+}
+
+export interface VariantResultOut {
+  id: string;
+  variant_name: string;
+  agent_name: string;
+  run_index: number;
+  hypothesis_id: string | null;
+  evaluation_score: number | null;
+  verdict: string | null;
+  dimension_scores: { name: string; score: number; reasoning: string }[];
+  created_at: string;
+}
+
+export interface SimulationOut {
+  id: string;
+  project_id: string;
+  experiment_id: string | null;
+  simulation_type: string;
+  question: string;
+  status: "pending" | "running" | "completed" | "failed";
+  best_variant: string | null;
+  summary: Record<string, { mean: number; std: number; runs: number }> | null;
+  variant_results: VariantResultOut[];
+  created_at: string;
+  updated_at: string;
+}

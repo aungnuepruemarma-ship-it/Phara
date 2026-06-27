@@ -34,6 +34,7 @@ export default function ProjectDetail() {
     { href: `/projects/${id}/report`, label: "Report", count: null },
     { href: `/projects/${id}/tracking`, label: "Tracking", count: null },
     { href: `/projects/${id}/graph`, label: "Graph", count: null },
+    { href: `/projects/${id}/simulations`, label: "Simulations", count: null },
   ];
 
   return (
