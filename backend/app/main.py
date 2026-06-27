@@ -68,6 +68,10 @@ if FRONTEND_DIR.exists():
     if _next_dir.exists():
         app.mount("/_next", StaticFiles(directory=_next_dir), name="nextjs-assets")
 
+    @app.get("/", include_in_schema=False)
+    async def spa_root():
+        return FileResponse(FRONTEND_DIR / "index.html")
+
     @app.get("/{full_path:path}", include_in_schema=False)
     async def spa_fallback(full_path: str):
         # Try exact file match (e.g. favicon.ico, images)
