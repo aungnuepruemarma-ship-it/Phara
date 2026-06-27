@@ -63,6 +63,17 @@ async def on_startup():
 # Serve Next.js static export when present (HF Spaces single-container mode)
 FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend" / "out"
 
+def _serve(path: Path) -> FileResponse:
+    """Serve a file, marking HTML shells as no-cache so devices always
+    revalidate and pick up the current hashed chunk references after a
+    redeploy. Hash-named assets under /_next are immutable and cached long."""
+    if path.suffix == ".html":
+        return FileResponse(
+            path, headers={"Cache-Control": "no-cache, must-revalidate"}
+        )
+    return FileResponse(path)
+
+
 if FRONTEND_DIR.exists():
     _next_dir = FRONTEND_DIR / "_next"
     if _next_dir.exists():
@@ -70,17 +81,17 @@ if FRONTEND_DIR.exists():
 
     @app.get("/", include_in_schema=False)
     async def spa_root():
-        return FileResponse(FRONTEND_DIR / "index.html")
+        return _serve(FRONTEND_DIR / "index.html")
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def spa_fallback(full_path: str):
         # Try exact file match (e.g. favicon.ico, images)
         candidate = FRONTEND_DIR / full_path
         if candidate.is_file():
-            return FileResponse(candidate)
+            return _serve(candidate)
         # Try directory index (trailing-slash pages)
         index = candidate / "index.html"
         if index.is_file():
-            return FileResponse(index)
+            return _serve(index)
         # SPA fallback
-        return FileResponse(FRONTEND_DIR / "index.html")
+        return _serve(FRONTEND_DIR / "index.html")
