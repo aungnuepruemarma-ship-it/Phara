@@ -94,14 +94,16 @@ async def run_roundtable(
     round1 = await asyncio.gather(*[_perspective(n) for n in names])
     turns.extend(round1)
 
-    # 3 — Pattern finder across the round-1 hypotheses (needs >= 2).
-    patterns: list[DomainPatternOut] = []
-    if len(round1) >= 2:
+    # 3 + 4 run concurrently — both depend only on round-1 outputs, so mining
+    # patterns and the cross-talk round happen in parallel to save a stage.
+    async def _mine() -> list[DomainPatternOut]:
+        if len(round1) < 2:
+            return []
         try:
             from intelligence.pattern_miner import mine_patterns
 
             mined = await mine_patterns([t.content for t in round1])
-            patterns = [
+            return [
                 DomainPatternOut(
                     pattern_type=p.pattern_type,
                     description=p.description,
@@ -111,13 +113,12 @@ async def run_roundtable(
                 for p in mined
             ][:6]
         except Exception:
-            patterns = []
+            return []
 
-    # 4 — Round 2: cross-talk (parallel), only when >= 2 agents.
-    if len(names) >= 2:
-        peer_blocks = {
-            name: _peer_digest(round1, exclude=name) for name in names
-        }
+    async def _crosstalk() -> list[AgentTurn]:
+        if len(names) < 2:
+            return []
+        peer_blocks = {name: _peer_digest(round1, exclude=name) for name in names}
 
         async def _rebuttal(name: str) -> AgentTurn:
             agent = get_agent(name)
@@ -133,8 +134,10 @@ async def run_roundtable(
             return AgentTurn(agent_name=name, role="rebuttal",
                              content=out.hypothesis, confidence=float(out.confidence))
 
-        round2 = await asyncio.gather(*[_rebuttal(n) for n in names])
-        turns.extend(round2)
+        return list(await asyncio.gather(*[_rebuttal(n) for n in names]))
+
+    patterns, round2 = await asyncio.gather(_mine(), _crosstalk())
+    turns.extend(round2)
 
     # 5 — Synthesis (moderator).
     final_text, final_conf = await _synthesize(
