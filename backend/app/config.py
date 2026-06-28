@@ -38,8 +38,9 @@ class Settings(BaseSettings):
     llm_base_url: str = "https://api.openai.com/v1"
     llm_model: str = "gpt-4o-mini"
     openrouter_api_key: str = ""
-    # A free OpenRouter model. Override with OPENROUTER_MODEL to pick another.
-    openrouter_model: str = "meta-llama/llama-3.1-8b-instruct:free"
+    # A currently-available free OpenRouter model. Override with OPENROUTER_MODEL.
+    # (llama-3.1-8b-instruct:free was retired; 3.3-70b:free is free + strong.)
+    openrouter_model: str = "meta-llama/llama-3.3-70b-instruct:free"
     hf_token: str = ""
     # Default to an ungated, inference-providers-served instruct model so a basic
     # free HF token works out of the box. Llama/Mistral are gated and 403 without
