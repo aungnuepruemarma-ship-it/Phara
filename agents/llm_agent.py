@@ -4,6 +4,7 @@ import json
 import httpx
 
 from agents.base_agent import AgentInput, AgentOutput, BaseAgent
+from agents.llm_client import auth_headers
 
 try:
     from app.config import settings as _settings
@@ -79,7 +80,7 @@ class LLMAgent(BaseAgent):
             with httpx.Client(timeout=90) as client:
                 resp = client.post(
                     f"{base_url}/chat/completions",
-                    headers={"Authorization": f"Bearer {api_key}"},
+                    headers=auth_headers(base_url, api_key),
                     json={
                         "model": model,
                         "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
@@ -101,7 +102,7 @@ class LLMAgent(BaseAgent):
             async with httpx.AsyncClient(timeout=90) as client:
                 resp = await client.post(
                     f"{base_url}/chat/completions",
-                    headers={"Authorization": f"Bearer {api_key}"},
+                    headers=auth_headers(base_url, api_key),
                     json={
                         "model": model,
                         "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],

@@ -30,11 +30,16 @@ class Settings(BaseSettings):
     # ── LLM ──────────────────────────────────────────────────────────────────
     # Option A (OpenAI / any OpenAI-compatible provider):
     #   LLM_API_KEY=sk-...  LLM_BASE_URL=https://api.openai.com/v1  LLM_MODEL=gpt-4o-mini
-    # Option B (HF Serverless Inference — free, rate-limited, no quota needed):
+    # Option B (OpenRouter — free models, OpenAI-compatible):
+    #   OPENROUTER_API_KEY=sk-or-...  (set as a Secret; OPENROUTER_MODEL optional)
+    # Option C (HF Serverless Inference — free, rate-limited, subject to credits):
     #   HF_TOKEN=hf_...  (auto-available in HF Spaces; set as a Secret)
     llm_api_key: str = ""
     llm_base_url: str = "https://api.openai.com/v1"
     llm_model: str = "gpt-4o-mini"
+    openrouter_api_key: str = ""
+    # A free OpenRouter model. Override with OPENROUTER_MODEL to pick another.
+    openrouter_model: str = "meta-llama/llama-3.1-8b-instruct:free"
     hf_token: str = ""
     # Default to an ungated, inference-providers-served instruct model so a basic
     # free HF token works out of the box. Llama/Mistral are gated and 403 without
@@ -43,9 +48,16 @@ class Settings(BaseSettings):
 
     @property
     def llm_credentials(self) -> tuple[str, str, str] | None:
-        """Returns (base_url, api_key, model) or None when no LLM is configured."""
+        """Returns (base_url, api_key, model) or None when no LLM is configured.
+        Priority: explicit LLM_API_KEY → OpenRouter → HF Inference."""
         if self.llm_api_key:
             return (self.llm_base_url, self.llm_api_key, self.llm_model)
+        if self.openrouter_api_key:
+            return (
+                "https://openrouter.ai/api/v1",
+                self.openrouter_api_key,
+                self.openrouter_model,
+            )
         if self.hf_token:
             return (
                 "https://router.huggingface.co/v1",

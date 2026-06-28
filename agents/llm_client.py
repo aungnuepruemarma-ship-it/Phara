@@ -7,6 +7,17 @@ except ImportError:
     _settings = None
 
 
+def auth_headers(base_url: str, api_key: str) -> dict:
+    """Build request headers for an OpenAI-compatible endpoint. OpenRouter also
+    wants HTTP-Referer / X-Title for ranking + free-tier acceptance; these are
+    harmless for other providers."""
+    headers = {"Authorization": f"Bearer {api_key}"}
+    if "openrouter" in base_url:
+        headers["HTTP-Referer"] = "https://huggingface.co/spaces/Aungnue546/universal-intelligence-lab"
+        headers["X-Title"] = "Universal Intelligence Lab"
+    return headers
+
+
 async def acall_llm(
     messages: list[dict],
     temperature: float = 0.7,
@@ -21,7 +32,7 @@ async def acall_llm(
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(
                 f"{base_url}/chat/completions",
-                headers={"Authorization": f"Bearer {api_key}"},
+                headers=auth_headers(base_url, api_key),
                 json={"model": model, "messages": messages, "temperature": temperature},
             )
             resp.raise_for_status()
@@ -44,7 +55,7 @@ def call_llm(
         with httpx.Client(timeout=timeout) as client:
             resp = client.post(
                 f"{base_url}/chat/completions",
-                headers={"Authorization": f"Bearer {api_key}"},
+                headers=auth_headers(base_url, api_key),
                 json={"model": model, "messages": messages, "temperature": temperature},
             )
             resp.raise_for_status()
