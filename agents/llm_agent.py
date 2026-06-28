@@ -1,31 +1,13 @@
 """Shared LLM call machinery for all specialist agents."""
 import json
 
-import httpx
-
 from agents.base_agent import AgentInput, AgentOutput, BaseAgent
-from agents.llm_client import auth_headers
+from agents.llm_client import resilient_chat, resilient_chat_sync
 
 try:
     from app.config import settings as _settings
 except ImportError:
     _settings = None
-
-
-def _describe_llm_error(exc: Exception) -> str:
-    """Short, safe description of an LLM call failure for surfacing to the user.
-    Includes HTTP status + a trimmed response body when available, never the
-    Authorization header or token."""
-    if isinstance(exc, httpx.HTTPStatusError):
-        body = ""
-        try:
-            body = exc.response.text[:200]
-        except Exception:  # noqa: BLE001
-            body = ""
-        return f"HTTP {exc.response.status_code}: {body}".strip()
-    if isinstance(exc, httpx.TimeoutException):
-        return "request timed out"
-    return f"{type(exc).__name__}: {str(exc)[:200]}"
 
 
 class LLMAgent(BaseAgent):
@@ -61,59 +43,34 @@ class LLMAgent(BaseAgent):
             "confidence": 0.0,
         }
 
-    def _llm_error_response(self, exc: Exception) -> dict:
-        """Degraded response when the LLM call fails — never raise, so the
+    def _unavailable_response(self) -> dict:
+        """Degraded response when every model/retry failed — never raise, so the
         research workflow always completes and returns a result."""
-        detail = _describe_llm_error(exc)
         return {
-            "hypothesis": f"Hypothesis generation is temporarily unavailable ({detail}).",
-            "reasoning": f"The configured LLM call failed: {detail}",
+            "hypothesis": (
+                "Hypothesis generation is temporarily unavailable — the free model "
+                "provider is rate-limited right now. Please run it again in a moment."
+            ),
+            "reasoning": "All configured LLM models were unavailable (rate-limited or busy) after retries.",
             "confidence": 0.0,
         }
+
+    def _messages(self, system: str, user: str) -> list[dict]:
+        return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
     def _call_llm(self, system: str, user: str) -> dict:
         creds = _settings.llm_credentials if _settings else None
         if not creds:
             return self._no_llm_response()
-        base_url, api_key, model = creds
-        try:
-            with httpx.Client(timeout=90) as client:
-                resp = client.post(
-                    f"{base_url}/chat/completions",
-                    headers=auth_headers(base_url, api_key),
-                    json={
-                        "model": model,
-                        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-                        "temperature": self.temperature,
-                    },
-                )
-                resp.raise_for_status()
-                content = resp.json()["choices"][0]["message"]["content"]
-        except Exception as exc:  # noqa: BLE001 — degrade gracefully, never 500
-            return self._llm_error_response(exc)
-        return self._parse_response(content)
+        text = resilient_chat_sync(self._messages(system, user), temperature=self.temperature)
+        return self._parse_response(text) if text else self._unavailable_response()
 
     async def _acall_llm(self, system: str, user: str) -> dict:
         creds = _settings.llm_credentials if _settings else None
         if not creds:
             return self._no_llm_response()
-        base_url, api_key, model = creds
-        try:
-            async with httpx.AsyncClient(timeout=90) as client:
-                resp = await client.post(
-                    f"{base_url}/chat/completions",
-                    headers=auth_headers(base_url, api_key),
-                    json={
-                        "model": model,
-                        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-                        "temperature": self.temperature,
-                    },
-                )
-                resp.raise_for_status()
-                content = resp.json()["choices"][0]["message"]["content"]
-        except Exception as exc:  # noqa: BLE001 — degrade gracefully, never 500
-            return self._llm_error_response(exc)
-        return self._parse_response(content)
+        text = await resilient_chat(self._messages(system, user), temperature=self.temperature)
+        return self._parse_response(text) if text else self._unavailable_response()
 
     def _extra_metadata(self, input_data: AgentInput) -> dict:
         return {}

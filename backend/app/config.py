@@ -41,6 +41,14 @@ class Settings(BaseSettings):
     # A currently-available free OpenRouter model. Override with OPENROUTER_MODEL.
     # (llama-3.1-8b-instruct:free was retired; 3.3-70b:free is free + strong.)
     openrouter_model: str = "meta-llama/llama-3.3-70b-instruct:free"
+    # Comma-separated fallbacks tried (in order) after openrouter_model when a free
+    # model is rate-limited (429) or retired (404). All confirmed free on OpenRouter.
+    openrouter_fallback_models: str = (
+        "meta-llama/llama-3.3-70b-instruct:free,"
+        "meta-llama/llama-3.2-3b-instruct:free,"
+        "openai/gpt-oss-20b:free,"
+        "qwen/qwen3-next-80b-a3b-instruct:free"
+    )
     hf_token: str = ""
     # Default to an ungated, inference-providers-served instruct model so a basic
     # free HF token works out of the box. Llama/Mistral are gated and 403 without
