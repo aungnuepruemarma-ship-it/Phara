@@ -77,55 +77,85 @@ async def run_research_workflow(request: WorkflowRequest, db: AsyncSession, curr
         pass
 
     if final_state is None:
-        # Legacy fallback
-        from workflows.base_step import PipelineContext
-        from workflows.pipeline import ResearchPipeline
-        from workflows.steps.contradiction_step import ContradictionStep
-        from workflows.steps.critique_step import CritiqueStep
-        from workflows.steps.debate_step import DebateStep
-        from workflows.steps.generate_hypothesis import GenerateHypothesisStep
-        from workflows.steps.retrieve_papers import RetrievePapersStep
-        from workflows.steps.save_experiment import SaveExperimentStep
-        from workflows.steps.summarize_evidence import SummarizeEvidenceStep
+        # Legacy fallback — guarded so an LLM/step failure degrades to a saved
+        # placeholder hypothesis instead of crashing the request with a 500.
+        try:
+            from workflows.base_step import PipelineContext
+            from workflows.pipeline import ResearchPipeline
+            from workflows.steps.contradiction_step import ContradictionStep
+            from workflows.steps.critique_step import CritiqueStep
+            from workflows.steps.debate_step import DebateStep
+            from workflows.steps.generate_hypothesis import GenerateHypothesisStep
+            from workflows.steps.retrieve_papers import RetrievePapersStep
+            from workflows.steps.save_experiment import SaveExperimentStep
+            from workflows.steps.summarize_evidence import SummarizeEvidenceStep
 
-        pipeline = ResearchPipeline(
-            steps=[
-                RetrievePapersStep(top_k=settings.retrieval_top_k),
-                SummarizeEvidenceStep(),
-                ContradictionStep(),
-                GenerateHypothesisStep(),
-                CritiqueStep(),
-                DebateStep(),
-                SaveExperimentStep(db=db),
-            ]
-        )
-        ctx = PipelineContext(
+            pipeline = ResearchPipeline(
+                steps=[
+                    RetrievePapersStep(top_k=settings.retrieval_top_k),
+                    SummarizeEvidenceStep(),
+                    ContradictionStep(),
+                    GenerateHypothesisStep(),
+                    CritiqueStep(),
+                    DebateStep(),
+                    SaveExperimentStep(db=db),
+                ]
+            )
+            ctx = PipelineContext(
+                question=request.question,
+                project_id=str(request.project_id),
+                experiment_id=str(experiment_id),
+                user_id=str(current_user.id),
+                agent_name=request.agent_name,
+                enable_critique=request.enable_critique,
+                enable_debate=request.enable_debate,
+                enable_contradiction_check=request.enable_contradiction_check,
+            )
+            ctx = await pipeline.run(ctx)
+            # Convert to state dict for unified downstream handling
+            final_state = {
+                "saved_hypothesis_id": ctx.saved_hypothesis_id,
+                "evidence_summary": ctx.evidence_summary,
+                "retrieved_paper_ids": ctx.retrieved_paper_ids,
+                "retrieved_chunks": ctx.retrieved_chunks,
+                "contradictions": ctx.contradictions,
+                "debate_results": ctx.debate_results,
+                "critique": ctx.critique,
+                "mlflow_run_id": ctx.mlflow_run_id,
+                "enable_debate": ctx.enable_debate,
+                "enable_critique": ctx.enable_critique,
+                "cross_domain_insights": [],
+                "kg_entities_created": [],
+                "tool_results": [],
+            }
+        except Exception:
+            # Both orchestration paths failed — make sure the session is usable.
+            try:
+                await db.rollback()
+            except Exception:
+                pass
+            final_state = {"saved_hypothesis_id": None}
+
+    # Guard: if nothing was saved, persist a minimal placeholder so the endpoint
+    # always returns a 200 WorkflowResult instead of raising on uuid.UUID(None).
+    if not final_state.get("saved_hypothesis_id"):
+        placeholder = Hypothesis(
+            id=uuid.uuid4(),
+            experiment_id=experiment_id,
             question=request.question,
-            project_id=str(request.project_id),
-            experiment_id=str(experiment_id),
-            user_id=str(current_user.id),
-            agent_name=request.agent_name,
-            enable_critique=request.enable_critique,
-            enable_debate=request.enable_debate,
-            enable_contradiction_check=request.enable_contradiction_check,
+            retrieved_paper_ids=[],
+            evidence_summary=final_state.get("evidence_summary", ""),
+            hypothesis_text=(
+                "Hypothesis generation could not be completed for this run. "
+                "Please try again; if it persists, check the LLM configuration."
+            ),
+            agent_used=request.agent_name,
+            confidence_score=0.0,
         )
-        ctx = await pipeline.run(ctx)
-        # Convert to state dict for unified downstream handling
-        final_state = {
-            "saved_hypothesis_id": ctx.saved_hypothesis_id,
-            "evidence_summary": ctx.evidence_summary,
-            "retrieved_paper_ids": ctx.retrieved_paper_ids,
-            "retrieved_chunks": ctx.retrieved_chunks,
-            "contradictions": ctx.contradictions,
-            "debate_results": ctx.debate_results,
-            "critique": ctx.critique,
-            "mlflow_run_id": ctx.mlflow_run_id,
-            "enable_debate": ctx.enable_debate,
-            "enable_critique": ctx.enable_critique,
-            "cross_domain_insights": [],
-            "kg_entities_created": [],
-            "tool_results": [],
-        }
+        db.add(placeholder)
+        await db.commit()
+        await db.refresh(placeholder)
+        final_state["saved_hypothesis_id"] = str(placeholder.id)
 
     result = await db.execute(
         select(Hypothesis).where(Hypothesis.id == uuid.UUID(final_state["saved_hypothesis_id"]))

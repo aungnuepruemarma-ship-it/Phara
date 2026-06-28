@@ -11,6 +11,22 @@ except ImportError:
     _settings = None
 
 
+def _describe_llm_error(exc: Exception) -> str:
+    """Short, safe description of an LLM call failure for surfacing to the user.
+    Includes HTTP status + a trimmed response body when available, never the
+    Authorization header or token."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        body = ""
+        try:
+            body = exc.response.text[:200]
+        except Exception:  # noqa: BLE001
+            body = ""
+        return f"HTTP {exc.response.status_code}: {body}".strip()
+    if isinstance(exc, httpx.TimeoutException):
+        return "request timed out"
+    return f"{type(exc).__name__}: {str(exc)[:200]}"
+
+
 class LLMAgent(BaseAgent):
     """BaseAgent subclass that adds async/sync LLM calling and JSON parsing."""
 
@@ -44,23 +60,36 @@ class LLMAgent(BaseAgent):
             "confidence": 0.0,
         }
 
+    def _llm_error_response(self, exc: Exception) -> dict:
+        """Degraded response when the LLM call fails — never raise, so the
+        research workflow always completes and returns a result."""
+        detail = _describe_llm_error(exc)
+        return {
+            "hypothesis": f"Hypothesis generation is temporarily unavailable ({detail}).",
+            "reasoning": f"The configured LLM call failed: {detail}",
+            "confidence": 0.0,
+        }
+
     def _call_llm(self, system: str, user: str) -> dict:
         creds = _settings.llm_credentials if _settings else None
         if not creds:
             return self._no_llm_response()
         base_url, api_key, model = creds
-        with httpx.Client(timeout=90) as client:
-            resp = client.post(
-                f"{base_url}/chat/completions",
-                headers={"Authorization": f"Bearer {api_key}"},
-                json={
-                    "model": model,
-                    "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-                    "temperature": self.temperature,
-                },
-            )
-            resp.raise_for_status()
-            content = resp.json()["choices"][0]["message"]["content"]
+        try:
+            with httpx.Client(timeout=90) as client:
+                resp = client.post(
+                    f"{base_url}/chat/completions",
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    json={
+                        "model": model,
+                        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+                        "temperature": self.temperature,
+                    },
+                )
+                resp.raise_for_status()
+                content = resp.json()["choices"][0]["message"]["content"]
+        except Exception as exc:  # noqa: BLE001 — degrade gracefully, never 500
+            return self._llm_error_response(exc)
         return self._parse_response(content)
 
     async def _acall_llm(self, system: str, user: str) -> dict:
@@ -68,18 +97,21 @@ class LLMAgent(BaseAgent):
         if not creds:
             return self._no_llm_response()
         base_url, api_key, model = creds
-        async with httpx.AsyncClient(timeout=90) as client:
-            resp = await client.post(
-                f"{base_url}/chat/completions",
-                headers={"Authorization": f"Bearer {api_key}"},
-                json={
-                    "model": model,
-                    "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-                    "temperature": self.temperature,
-                },
-            )
-            resp.raise_for_status()
-            content = resp.json()["choices"][0]["message"]["content"]
+        try:
+            async with httpx.AsyncClient(timeout=90) as client:
+                resp = await client.post(
+                    f"{base_url}/chat/completions",
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    json={
+                        "model": model,
+                        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+                        "temperature": self.temperature,
+                    },
+                )
+                resp.raise_for_status()
+                content = resp.json()["choices"][0]["message"]["content"]
+        except Exception as exc:  # noqa: BLE001 — degrade gracefully, never 500
+            return self._llm_error_response(exc)
         return self._parse_response(content)
 
     def _extra_metadata(self, input_data: AgentInput) -> dict:

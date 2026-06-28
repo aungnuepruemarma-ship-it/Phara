@@ -17,14 +17,17 @@ async def acall_llm(
     if not creds:
         return None
     base_url, api_key, model = creds
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        resp = await client.post(
-            f"{base_url}/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}"},
-            json={"model": model, "messages": messages, "temperature": temperature},
-        )
-        resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"]
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(
+                f"{base_url}/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}"},
+                json={"model": model, "messages": messages, "temperature": temperature},
+            )
+            resp.raise_for_status()
+            return resp.json()["choices"][0]["message"]["content"]
+    except Exception:  # noqa: BLE001 — callers treat None as "no LLM" and fall back
+        return None
 
 
 def call_llm(
@@ -37,11 +40,14 @@ def call_llm(
     if not creds:
         return None
     base_url, api_key, model = creds
-    with httpx.Client(timeout=timeout) as client:
-        resp = client.post(
-            f"{base_url}/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}"},
-            json={"model": model, "messages": messages, "temperature": temperature},
-        )
-        resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"]
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            resp = client.post(
+                f"{base_url}/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}"},
+                json={"model": model, "messages": messages, "temperature": temperature},
+            )
+            resp.raise_for_status()
+            return resp.json()["choices"][0]["message"]["content"]
+    except Exception:  # noqa: BLE001 — callers treat None as "no LLM" and fall back
+        return None

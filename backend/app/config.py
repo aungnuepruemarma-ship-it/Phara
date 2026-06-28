@@ -36,7 +36,10 @@ class Settings(BaseSettings):
     llm_base_url: str = "https://api.openai.com/v1"
     llm_model: str = "gpt-4o-mini"
     hf_token: str = ""
-    hf_llm_model: str = "meta-llama/Llama-3.1-8B-Instruct"
+    # Default to an ungated, inference-providers-served instruct model so a basic
+    # free HF token works out of the box. Llama/Mistral are gated and 403 without
+    # license acceptance. Override with HF_LLM_MODEL if you have access to others.
+    hf_llm_model: str = "Qwen/Qwen2.5-7B-Instruct"
 
     @property
     def llm_credentials(self) -> tuple[str, str, str] | None:
