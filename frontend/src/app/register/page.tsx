@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import api from "@/lib/api";
+import { extractErrorMessage } from "@/lib/errors";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -18,8 +19,7 @@ export default function RegisterPage() {
       await api.post("/auth/register", form);
       router.push("/login");
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(msg || "Registration failed.");
+      setError(extractErrorMessage(err, "Registration failed."));
     } finally {
       setLoading(false);
     }

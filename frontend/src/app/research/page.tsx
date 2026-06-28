@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import AuthGuard from "@/components/layout/AuthGuard";
 import Sidebar from "@/components/layout/Sidebar";
 import api from "@/lib/api";
+import { extractErrorMessage } from "@/lib/errors";
 import type { Project, Experiment, WorkflowResult, DebateEntry, ContradictionItem, ToolSpec, ToolResult } from "@/types";
 import ReactMarkdown from "react-markdown";
 
@@ -143,10 +144,14 @@ export default function ResearchPage() {
     setResult(null);
     setRunning(true);
     try {
-      const r = await api.post("/research/run", form);
+      // Omit experiment_id when blank — the backend auto-creates one. Sending an
+      // empty string fails UUID validation (422).
+      const { experiment_id, ...rest } = form;
+      const payload = experiment_id ? { ...rest, experiment_id } : rest;
+      const r = await api.post("/research/run", payload);
       setResult(r.data);
     } catch (err: unknown) {
-      setError((err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "Workflow failed.");
+      setError(extractErrorMessage(err, "Workflow failed. Please try again."));
     } finally {
       setRunning(false);
     }

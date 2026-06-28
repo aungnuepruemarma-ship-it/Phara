@@ -1,7 +1,7 @@
 import uuid
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from app.schemas.hypothesis import HypothesisOut
 
@@ -16,6 +16,15 @@ class WorkflowRequest(BaseModel):
     enable_contradiction_check: bool = False
     enabled_tools: list[str] = []
     auto_tools: bool = True  # when True and enabled_tools empty, agent auto-selects tools
+
+    @field_validator("experiment_id", mode="before")
+    @classmethod
+    def _blank_experiment_id_to_none(cls, v):
+        # Frontends may send "" for "no experiment selected" — treat as None so
+        # the workflow auto-creates one instead of failing UUID validation (422).
+        if v in ("", None):
+            return None
+        return v
 
 
 class DebateEntry(BaseModel):
