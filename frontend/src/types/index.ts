@@ -125,6 +125,29 @@ export interface WorkflowResult {
   tool_results: ToolResult[];
 }
 
+export interface AgentTurn {
+  agent_name: string;
+  role: "perspective" | "rebuttal" | "synthesis";
+  content: string;
+  confidence: number;
+}
+
+export interface DomainPatternOut {
+  pattern_type: string;
+  description: string;
+  domains_seen: string[];
+  confidence: number;
+}
+
+export interface RoundtableResult {
+  turns: AgentTurn[];
+  final_text: string;
+  final_confidence: number;
+  patterns: DomainPatternOut[];
+  saved_hypothesis_id: string | null;
+  retrieved_paper_count: number;
+}
+
 export interface ProjectReport {
   project_id: string;
   project_name: string;

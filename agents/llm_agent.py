@@ -20,8 +20,22 @@ class LLMAgent(BaseAgent):
 
     def _build_user_prompt(self, input_data: AgentInput) -> str:
         evidence = "\n\n".join(f"[Source {i+1}]: {chunk}" for i, chunk in enumerate(input_data.context))
+        evidence_block = f"Evidence from retrieved papers:\n{evidence}\n\n" if evidence.strip() else ""
+
+        # Multi-agent collaboration: an extra instruction and a digest of other
+        # agents' contributions are injected so this agent can respond to peers.
+        instruction = input_data.parameters.get("instruction", "")
+        peer_context = input_data.parameters.get("peer_context", "")
+        history = input_data.parameters.get("history", "")
+        instruction_block = f"{instruction}\n\n" if instruction else ""
+        peer_block = f"What other expert agents said:\n{peer_context}\n\n" if peer_context else ""
+        history_block = f"Earlier conversation:\n{history}\n\n" if history else ""
+
         return (
-            f"Evidence from retrieved papers:\n{evidence}\n\n"
+            f"{instruction_block}"
+            f"{history_block}"
+            f"{evidence_block}"
+            f"{peer_block}"
             f"Research question: {input_data.question}\n\n"
             'Respond with JSON: {"hypothesis": "...", "reasoning": "...", "confidence": 0.0-1.0}'
         )

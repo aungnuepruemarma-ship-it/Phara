@@ -52,3 +52,47 @@ class WorkflowResult(BaseModel):
     contradictions: list[ContradictionItem] = []
     mlflow_run_id: str | None = None
     tool_results: list[dict] = []
+
+
+# ── Multi-agent chat roundtable ──────────────────────────────────────────────
+class ChatHistoryEntry(BaseModel):
+    role: str  # "user" | "assistant"
+    content: str
+
+
+class RoundtableRequest(BaseModel):
+    question: str
+    project_id: uuid.UUID
+    agent_names: list[str]
+    experiment_id: Optional[uuid.UUID] = None
+    history: list[ChatHistoryEntry] = []
+
+    @field_validator("experiment_id", mode="before")
+    @classmethod
+    def _blank_experiment_id_to_none(cls, v):
+        if v in ("", None):
+            return None
+        return v
+
+
+class AgentTurn(BaseModel):
+    agent_name: str
+    role: str  # "perspective" | "rebuttal" | "synthesis"
+    content: str
+    confidence: float
+
+
+class DomainPatternOut(BaseModel):
+    pattern_type: str
+    description: str
+    domains_seen: list[str] = []
+    confidence: float = 0.7
+
+
+class RoundtableResult(BaseModel):
+    turns: list[AgentTurn]
+    final_text: str
+    final_confidence: float
+    patterns: list[DomainPatternOut] = []
+    saved_hypothesis_id: str | None = None
+    retrieved_paper_count: int = 0
