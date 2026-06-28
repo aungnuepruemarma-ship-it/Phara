@@ -48,7 +48,7 @@ fi
 # 7. Write ~/.claude/settings.json with all 5 MCP servers
 mkdir -p ~/.claude
 FAL_KEY="9fadd662-39fe-4a7c-a8b4-3dde85ee79dd:1cf87670cc81aa998ab0817f28ec4dcb"
-SHODAN_API_KEY="${SHODAN_API_KEY:-ZWTeaB8KUSE7yRg6VVVkpDJGqkK7KwzM}"
+SHODAN_API_KEY="${SHODAN_API_KEY:-mbmKNnuM6e5R1YJPOwFYTZQJ203kYCpg}"
 
 cat > ~/.claude/settings.json <<JSON
 {
