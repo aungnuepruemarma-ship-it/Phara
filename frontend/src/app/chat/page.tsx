@@ -12,6 +12,15 @@ interface AgentInfo {
   description: string;
 }
 
+// Tools/skills the panel can use. code_sandbox runs Python experiments.
+const TOOL_OPTIONS: { name: string; label: string }[] = [
+  { name: "web_search", label: "Real-time web" },
+  { name: "wikipedia_search", label: "Wikipedia" },
+  { name: "arxiv_search", label: "arXiv" },
+  { name: "semantic_scholar_search", label: "Semantic Scholar" },
+  { name: "code_sandbox", label: "🧪 Code sandbox" },
+];
+
 type ChatMessage =
   | { kind: "user"; text: string }
   | { kind: "assistant"; result: RoundtableResult };
@@ -46,17 +55,56 @@ function AgentBubble({ turn }: { turn: AgentTurn }) {
   );
 }
 
+function LiveDataCard({ result }: { result: RoundtableResult }) {
+  const ok = result.tool_results.filter((t) => t.success);
+  if (ok.length === 0) return null;
+  return (
+    <div className="bg-surface-3/50 border border-surface-3 rounded-lg p-4">
+      <p className="text-xs font-semibold text-cyan-300 uppercase tracking-wide mb-2">
+        Live data fetched
+      </p>
+      <ul className="space-y-1">
+        {ok.map((t, i) => (
+          <li key={i} className="text-xs text-slate-400">
+            <span className="font-medium text-slate-200">{t.tool_name}</span>
+            {" — "}
+            {Array.isArray(t.output) ? `${t.output.length} result(s)` : "fetched"}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ExperimentCard({ turn }: { turn: AgentTurn }) {
+  return (
+    <div className="bg-black/30 border border-emerald-800 rounded-lg p-4">
+      <p className="text-xs font-semibold text-emerald-300 uppercase tracking-wide mb-2">
+        🧪 Code sandbox experiment
+      </p>
+      <div className="prose prose-invert prose-sm max-w-none">
+        <ReactMarkdown>{turn.content}</ReactMarkdown>
+      </div>
+    </div>
+  );
+}
+
 function AssistantTurnView({ result }: { result: RoundtableResult }) {
   const perspectives = result.turns.filter((t) => t.role === "perspective");
   const rebuttals = result.turns.filter((t) => t.role === "rebuttal");
+  const experiment = result.turns.find((t) => t.role === "experiment");
   return (
     <div className="space-y-5">
+      <LiveDataCard result={result} />
+
       {perspectives.length > 0 && (
         <div className="space-y-4">
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Round 1 · Perspectives</p>
           {perspectives.map((t, i) => <AgentBubble key={`p${i}`} turn={t} />)}
         </div>
       )}
+
+      {experiment && <ExperimentCard turn={experiment} />}
 
       {result.patterns.length > 0 && (
         <div className="bg-surface-3/50 border border-surface-3 rounded-lg p-4">
@@ -102,6 +150,7 @@ export default function ChatPage() {
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [projectId, setProjectId] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
+  const [tools, setTools] = useState<string[]>([]);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [running, setRunning] = useState(false);
@@ -133,6 +182,10 @@ export default function ChatPage() {
     setSelected((s) => (s.includes(name) ? s.filter((n) => n !== name) : [...s, name]));
   }
 
+  function toggleTool(name: string) {
+    setTools((s) => (s.includes(name) ? s.filter((n) => n !== name) : [...s, name]));
+  }
+
   async function send() {
     const question = input.trim();
     if (!question || running) return;
@@ -154,6 +207,7 @@ export default function ChatPage() {
         question,
         project_id: projectId,
         agent_names: selected,
+        tools,
         history,
       });
       setMessages((prev) => [...prev, { kind: "assistant", result: r.data as RoundtableResult }]);
@@ -211,6 +265,26 @@ export default function ChatPage() {
               <span className="text-xs text-slate-500 self-center ml-1">
                 {selected.length} selected · up to 4 used
               </span>
+            </div>
+            <div className="flex flex-wrap gap-2 mt-2 items-center">
+              <span className="text-xs text-slate-500 mr-1">Tools:</span>
+              {TOOL_OPTIONS.map((t) => {
+                const on = tools.includes(t.name);
+                return (
+                  <button
+                    key={t.name}
+                    type="button"
+                    onClick={() => toggleTool(t.name)}
+                    className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                      on
+                        ? "bg-surface-3 text-cyan-300 border-cyan-700"
+                        : "border-slate-700 text-slate-500 hover:text-slate-300"
+                    }`}
+                  >
+                    {on ? "✓ " : ""}{t.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 

@@ -663,3 +663,108 @@ register_tool(
     ),
     _openalex_search,
 )
+
+
+# ===========================================================================
+# 13. code_sandbox — run Python in an isolated subprocess (experiment/test env)
+# ===========================================================================
+
+async def _code_sandbox(code: str, timeout: int = 10) -> dict:
+    """Execute a self-contained Python snippet in a locked-down subprocess and
+    return its output. Used by agents to run numerical experiments, simulations,
+    and quick tests.
+
+    Safety: a scrubbed environment (no secrets are exposed), CPU/memory/file-size
+    rlimits, a hard wall-clock timeout, and a throwaway working directory.
+    """
+    import asyncio
+    import os
+    import shutil
+    import sys
+    import tempfile
+
+    timeout = max(1, min(int(timeout or 10), 30))
+    code = (code or "").strip()
+    if not code:
+        return {"stdout": "", "stderr": "No code provided.", "exit_code": -1, "timed_out": False}
+
+    workdir = tempfile.mkdtemp(prefix="sandbox_")
+    script = os.path.join(workdir, "main.py")
+    try:
+        with open(script, "w") as fh:
+            fh.write(code)
+
+        # Minimal env — deliberately omit all secrets (API keys, SECRET_KEY, ...).
+        safe_env = {
+            "PATH": os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"),
+            "PYTHONUNBUFFERED": "1",
+            "HOME": workdir,
+            "TMPDIR": workdir,
+            "LANG": "C.UTF-8",
+        }
+
+        def _limits():  # pragma: no cover — runs in the child process (Linux)
+            try:
+                import resource
+                cpu = timeout + 1
+                resource.setrlimit(resource.RLIMIT_CPU, (cpu, cpu))
+                mem = 512 * 1024 * 1024  # 512 MB address space
+                resource.setrlimit(resource.RLIMIT_AS, (mem, mem))
+                fsize = 10 * 1024 * 1024  # 10 MB max file size
+                resource.setrlimit(resource.RLIMIT_FSIZE, (fsize, fsize))
+            except Exception:
+                pass
+
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable, "-I", "-E", "-B", script,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=workdir,
+            env=safe_env,
+            preexec_fn=_limits if os.name == "posix" else None,
+        )
+        try:
+            out, err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+            timed_out = False
+        except asyncio.TimeoutError:
+            proc.kill()
+            try:
+                await proc.communicate()
+            except Exception:
+                pass
+            return {"stdout": "", "stderr": f"Execution timed out after {timeout}s.",
+                    "exit_code": -1, "timed_out": True}
+
+        return {
+            "stdout": (out or b"").decode("utf-8", "replace")[:4000],
+            "stderr": (err or b"").decode("utf-8", "replace")[:2000],
+            "exit_code": proc.returncode,
+            "timed_out": timed_out,
+        }
+    except Exception as exc:
+        return {"stdout": "", "stderr": str(exc)[:500], "exit_code": -1, "timed_out": False}
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+
+
+register_tool(
+    ToolSpec(
+        name="code_sandbox",
+        description=(
+            "Run a self-contained Python 3 snippet in an isolated sandbox and return its "
+            "stdout/stderr. Use for numerical experiments, simulations, quick calculations, "
+            "and tests. Standard library only; the code MUST print() its results. No network "
+            "secrets are available; CPU, memory, and time are limited."
+        ),
+        category="compute",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "code":    {"type": "string", "description": "Python source to execute. Must print() any output you want back."},
+                "timeout": {"type": "integer", "default": 10, "description": "Max seconds to run (1–30)."},
+            },
+            "required": ["code"],
+        },
+    ),
+    _code_sandbox,
+)

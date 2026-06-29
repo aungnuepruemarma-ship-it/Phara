@@ -127,7 +127,7 @@ export interface WorkflowResult {
 
 export interface AgentTurn {
   agent_name: string;
-  role: "perspective" | "rebuttal" | "synthesis";
+  role: "perspective" | "rebuttal" | "synthesis" | "experiment";
   content: string;
   confidence: number;
 }
@@ -144,6 +144,7 @@ export interface RoundtableResult {
   final_text: string;
   final_confidence: number;
   patterns: DomainPatternOut[];
+  tool_results: ToolResult[];
   saved_hypothesis_id: string | null;
   retrieved_paper_count: number;
 }

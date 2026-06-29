@@ -80,6 +80,16 @@ async def run_roundtable(
 
     turns: list[AgentTurn] = []
 
+    # 1b — Real-time data tools (run before round 1 so all agents see live data).
+    tool_results: list[dict] = []
+    data_tools = [t for t in (req.tools or []) if t != "code_sandbox"]
+    use_sandbox = "code_sandbox" in (req.tools or [])
+    if data_tools:
+        tool_results = await _run_data_tools(data_tools, req.question, str(req.project_id))
+        live = _summarize_tool_results(tool_results)
+        if live:
+            chunks = list(chunks) + [live]
+
     # 2 — Round 1: independent perspectives (parallel).
     async def _perspective(name: str) -> AgentTurn:
         agent = get_agent(name)
@@ -93,6 +103,16 @@ async def run_roundtable(
 
     round1 = await asyncio.gather(*[_perspective(n) for n in names])
     turns.extend(round1)
+
+    # 2b — Experiment: the panel writes + runs Python in the sandbox to test the
+    # leading hypothesis. Its output is injected into round 2 + synthesis.
+    experiment_turn: AgentTurn | None = None
+    experiment_context = ""
+    if use_sandbox:
+        experiment_turn = await _run_experiment(req.question, round1)
+        if experiment_turn:
+            turns.append(experiment_turn)
+            experiment_context = experiment_turn.content
 
     # 3 + 4 run concurrently — both depend only on round-1 outputs, so mining
     # patterns and the cross-talk round happen in parallel to save a stage.
@@ -122,12 +142,15 @@ async def run_roundtable(
 
         async def _rebuttal(name: str) -> AgentTurn:
             agent = get_agent(name)
+            peer = peer_blocks[name]
+            if experiment_context:
+                peer = f"{peer}\n\n[code_sandbox experiment]:\n{experiment_context[:800]}"
             out = await agent.arun(AgentInput(
                 question=req.question,
                 context=chunks,
                 parameters={
                     "instruction": _REBUTTAL_INSTRUCTION,
-                    "peer_context": peer_blocks[name],
+                    "peer_context": peer,
                     "history": history_text,
                 },
             ))
@@ -154,6 +177,7 @@ async def run_roundtable(
         final_text=final_text,
         final_confidence=final_conf,
         patterns=patterns,
+        tool_results=tool_results,
         saved_hypothesis_id=saved_id,
         retrieved_paper_count=len(paper_ids),
     )
@@ -171,8 +195,106 @@ def _format_history(history) -> str:
 
 def _peer_digest(turns: list[AgentTurn], exclude: str) -> str:
     return "\n\n".join(
-        f"[{t.agent_name}]: {t.content[:600]}" for t in turns if t.agent_name != exclude
+        f"[{t.agent_name}]: {t.content[:600]}"
+        for t in turns
+        if t.agent_name != exclude and t.role in ("perspective", "experiment")
     )
+
+
+def _tool_args(name: str, question: str, project_id: str) -> dict:
+    """Map a data tool name to call args (mirrors workflows/research_graph tool_use_node)."""
+    if name == "knowledge_search":
+        return {"query": question, "project_id": project_id, "top_k": 5}
+    if name in ("arxiv_search", "web_search", "semantic_scholar_search",
+                "pubmed_search", "crossref_search", "openalex_search"):
+        return {"query": question, "max_results": 5}
+    if name == "wikipedia_search":
+        return {"query": question, "top_k": 3}
+    if name == "extract_entities":
+        return {"text": question}
+    return {"query": question}
+
+
+async def _run_data_tools(tool_names: list[str], question: str, project_id: str) -> list[dict]:
+    import tools.builtin_tools  # noqa: F401 — ensure registration
+    from tools.tool_registry import TOOL_REGISTRY, call_tool
+
+    valid = [t for t in tool_names if t in TOOL_REGISTRY][:5]
+
+    async def _one(name: str) -> dict:
+        tr = await call_tool(name, _tool_args(name, question, project_id))
+        return tr.to_dict()
+
+    if not valid:
+        return []
+    return list(await asyncio.gather(*[_one(n) for n in valid]))
+
+
+def _summarize_tool_results(tool_results: list[dict]) -> str:
+    parts: list[str] = []
+    for tr in tool_results:
+        if not tr.get("success"):
+            continue
+        out = tr.get("output")
+        name = tr.get("tool_name", "tool")
+        if isinstance(out, list) and out:
+            preview = str(out[:3])[:600]
+        elif out:
+            preview = str(out)[:600]
+        else:
+            continue
+        parts.append(f"[{name}]: {preview}")
+    if not parts:
+        return ""
+    return "Live data fetched for this question:\n" + "\n".join(parts)
+
+
+async def _run_experiment(question: str, round1: list[AgentTurn]) -> AgentTurn | None:
+    """Have the panel write a short Python experiment and run it in the sandbox."""
+    import re
+
+    from agents.llm_client import resilient_chat
+
+    leading = max(round1, key=lambda t: t.confidence) if round1 else None
+    hypothesis = leading.content if leading else ""
+
+    system = (
+        "You are a computational scientist. Write a SHORT, self-contained Python 3 "
+        "experiment (standard library only) that empirically probes or illustrates the "
+        "research idea below — e.g. a small simulation, numerical check, or statistical "
+        "test. It MUST print() clear, labeled results. Keep it under ~40 lines and fast "
+        "(<5s). Respond with ONLY a ```python code block."
+    )
+    user = f"Question: {question}\n\nLeading hypothesis:\n{hypothesis[:800]}"
+
+    code_text = await resilient_chat(
+        [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        temperature=0.3,
+    )
+    if not code_text:
+        return None
+
+    m = re.search(r"```(?:python)?\s*(.*?)```", code_text, re.DOTALL)
+    code = (m.group(1) if m else code_text).strip()
+    if not code:
+        return None
+
+    import tools.builtin_tools  # noqa: F401
+    from tools.tool_registry import call_tool
+
+    tr = await call_tool("code_sandbox", {"code": code, "timeout": 10})
+    out = tr.output or {}
+    stdout = (out.get("stdout") or "").strip()
+    stderr = (out.get("stderr") or "").strip()
+    result_block = stdout if stdout else (f"(no output)\n{stderr}" if stderr else "(no output)")
+
+    content = (
+        f"**Experiment run in the code sandbox:**\n\n```python\n{code}\n```\n\n"
+        f"**Output:**\n```\n{result_block[:1500]}\n```"
+    )
+    confidence = 0.8 if (tr.success and stdout and not out.get("timed_out")) else 0.3
+    return AgentTurn(agent_name="code_sandbox", role="experiment",
+                     content=content, confidence=confidence)
 
 
 async def _synthesize(question, turns, patterns, history_text) -> tuple[str, float]:

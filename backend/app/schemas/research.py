@@ -66,6 +66,8 @@ class RoundtableRequest(BaseModel):
     agent_names: list[str]
     experiment_id: Optional[uuid.UUID] = None
     history: list[ChatHistoryEntry] = []
+    tools: list[str] = []  # tool names the panel may use (incl. "code_sandbox")
+    auto_tools: bool = False
 
     @field_validator("experiment_id", mode="before")
     @classmethod
@@ -94,5 +96,6 @@ class RoundtableResult(BaseModel):
     final_text: str
     final_confidence: float
     patterns: list[DomainPatternOut] = []
+    tool_results: list[dict] = []
     saved_hypothesis_id: str | None = None
     retrieved_paper_count: int = 0
