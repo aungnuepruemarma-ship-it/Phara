@@ -99,6 +99,34 @@ This is the intended behaviour: a genuinely novel, falsifiable method, built and
 then *measured* — delivering one confirmed prediction, one interpretable
 discovery, and one clean negative result.
 
+## Ricci Computing (`ricci.py`) — curvature of the reasoning graph
+
+Idea: the reachability graph of a search process has intrinsic (Forman-Ricci)
+curvature; difficulty lives at negative-curvature bottlenecks; and operators
+should be *selected by geometry* (bridge the bottlenecks) rather than by
+frequency — because a geometric rule is coordinate-free and can run unchanged
+in every domain with **zero success-trace supervision**.
+
+Run it: `python -m sciloop ricci --domains arith,strings,vector`
+
+**Measured verdict (3 seeds, 75 tasks/domain):**
+- **Difficulty — strongest signal yet, but not universal.** Integrated negative
+  curvature along the solution path vs log(effort): **arith ρ = +0.839** (beats
+  first-conflict depth's +0.763 and CNE's −0.66), strings +0.31 (weak),
+  vector −0.17 (null). Confirmed in one domain, not all — reported as such.
+- **Zero-shot operator placement — FALSIFIED (v1 rule).** The pure
+  bridge-the-most-negative-curvature rule selected *regressive* sequences
+  (`down+down+left`, `triple+halve`); none survived certification, while
+  supervised frequency mining kept strong macros in all three domains
+  (improvements 32–96). Geometry alone knows where the bottlenecks are but not
+  *which way through them* — the rule needs a directionality term.
+- **Structural diagnosis (why):** the sampled reachability graphs are
+  triangle-free (frac_negative ≈ 1.0 everywhere), so Forman curvature collapses
+  to degree structure — search graphs are near-trees (hyperbolic). Testing the
+  full idea properly needs Ollivier curvature (transport-based) and/or richer
+  domains whose graphs contain cycles/triangles. That is the concrete,
+  falsifiable next step this experiment earned.
+
 ## What is a hypothesis, not a guarantee
 Whether execution geometry contains *transferable* invariants, and whether
 evolving the grammar beats existing abstraction-learning methods, are open

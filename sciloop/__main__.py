@@ -126,6 +126,40 @@ def cmd_noether(args):
                                 indent=2, default=str))
 
 
+def cmd_ricci(args):
+    from . import ricci
+    doms = args.domains.split(",") if args.domains else ["arith", "strings", "vector"]
+
+    print("=== Ricci Computing ===")
+    print("Curvature of the reachability graph: difficulty at negative-curvature bottlenecks;\n"
+          "operators selected by a zero-supervision geometric bridge rule.\n")
+
+    print("-- DIFFICULTY: integrated negative curvature along solution path vs log(effort) --")
+    diff = {}
+    for d in doms:
+        r = ricci.difficulty_analysis(d, seeds=args.seeds)
+        diff[d] = r
+        c = r["curvature"]
+        print(f"  [{d}] graph edges={c.get('edges')} frac_negative={c.get('frac_negative')} "
+              f"mean_curv={c.get('mean')}")
+        print(f"        Spearman(neg-curv, log effort) = "
+              f"{r['spearman_negcurv_vs_logeffort']:+.3f}  (n={r['n']})")
+
+    print("\n-- A/B: operator selection — frequency (supervised) vs curvature (zero-shot) --")
+    ab = ricci.ab_compare(doms, seeds=args.seeds)
+    for d in doms:
+        arm = ab["arms"][d]
+        fa, cb = arm["frequency_supervised"], arm["curvature_zero_shot"]
+        print(f"  [{d}]")
+        print(f"    supervised : kept={fa['kept'] or '(none)'} best_improvement={fa['best_improvement']}")
+        print(f"    zero-shot  : candidates={cb['candidates']}")
+        print(f"                 kept={cb['kept'] or '(none)'} best_improvement={cb['best_improvement']}")
+        print(f"    zero-shot matches supervised: {arm['zero_shot_matches_supervised']}")
+
+    if args.json:
+        print("\n" + json.dumps({"difficulty": diff, "ab": ab}, indent=2, default=str))
+
+
 def cmd_evidence(args):
     store = Store()
     if args.action == "show" and args.id:
@@ -194,6 +228,10 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("noether"); s.add_argument("--domains", default="")
     s.add_argument("--seeds", type=int, default=3)
     s.add_argument("--json", action="store_true"); s.set_defaults(func=cmd_noether)
+
+    s = sub.add_parser("ricci"); s.add_argument("--domains", default="")
+    s.add_argument("--seeds", type=int, default=3)
+    s.add_argument("--json", action="store_true"); s.set_defaults(func=cmd_ricci)
 
     s = sub.add_parser("evidence"); s.add_argument("action", nargs="?", default="ls",
                                                    choices=["ls", "show"])
