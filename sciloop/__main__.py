@@ -85,6 +85,47 @@ def cmd_transfer(args):
         print(f"{src:>20}   {row}")
 
 
+def cmd_noether(args):
+    from . import noether
+    doms = args.domains.split(",") if args.domains else ["arith", "strings", "vector"]
+
+    print("=== Computational Noether Engine ===")
+    print("Discovering conserved quantities of successful search, deriving symmetry operators,\n"
+          "and testing whether they transfer better than syntactic-motif operators.\n")
+    per_domain = {}
+    for d in doms:
+        r = noether.run_cne(d, seeds=args.seeds)
+        r.pop("_Q", None)
+        per_domain[d] = r
+        q = r["conserved_quantity"]
+        print(f"[{d}] conserved Q = {q['expression']}")
+        print(f"      pos_drift={q['pos_drift']} neg_drift={q['neg_drift']} "
+              f"conservation_score={q['conservation_score']}")
+        syms = [s for s in r["symmetry_operators"] if s["is_symmetry"]]
+        print(f"      symmetry generators: {['+'.join(s['sequence']) for s in syms][:5]}")
+        print(f"      certified (beats controls): "
+              f"{['+'.join(c['sequence']) for c in r['certified_symmetry_operators']] or '(none)'}")
+
+    print("\n-- HEADLINE: transfer of syntactic vs symmetry operators (nodes/task saved) --")
+    cmp = noether.compare_transfer(doms, seeds=args.seeds)
+    for label in ("syntactic", "symmetry"):
+        print(f"  {label}:")
+        for src in doms:
+            print("    " + f"{src:>8}: " +
+                  "  ".join(f"{t}={cmp[label][src][t]:>6.1f}" for t in doms))
+
+    print("\n-- DIFFICULTY: Q-breaking depth vs log(effort), Spearman --")
+    diff = {}
+    for d in doms:
+        bp = noether.breaking_point_analysis(d, seeds=args.seeds)
+        diff[d] = bp["spearman_breakdepth_vs_logeffort"]
+        print(f"    {d:>8}: rho = {bp['spearman_breakdepth_vs_logeffort']:+.3f}  (n={bp['n']})")
+
+    if args.json:
+        print("\n" + json.dumps({"per_domain": per_domain, "transfer": cmp, "difficulty": diff},
+                                indent=2, default=str))
+
+
 def cmd_evidence(args):
     store = Store()
     if args.action == "show" and args.id:
@@ -149,6 +190,10 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("transfer"); s.add_argument("--domains", default="")
     s.add_argument("--seeds", type=int, default=3)
     s.add_argument("--json", action="store_true"); s.set_defaults(func=cmd_transfer)
+
+    s = sub.add_parser("noether"); s.add_argument("--domains", default="")
+    s.add_argument("--seeds", type=int, default=3)
+    s.add_argument("--json", action="store_true"); s.set_defaults(func=cmd_noether)
 
     s = sub.add_parser("evidence"); s.add_argument("action", nargs="?", default="ls",
                                                    choices=["ls", "show"])

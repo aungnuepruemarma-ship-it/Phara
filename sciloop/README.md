@@ -68,6 +68,37 @@ python -m sciloop status                                # workspace / ecology / 
 - The cross-family transfer matrix currently shows macros are **family-specific**
   (they help within a family, not across) — a real, falsifiable negative result.
 
+## The Computational Noether Engine (`noether.py`) — a novel method
+
+Noether's theorem run **backwards on a search process**: every symmetry of a
+system's dynamics has a conserved quantity. CNE (a) discovers a quantity `Q`
+over execution-geometry observables that stays constant along *successful*
+trajectories but not random ones (a "conservation law of good reasoning"),
+(b) finds the operator compositions that leave `Q` invariant (its symmetry
+generators), and (c) tests whether those symmetry operators **transfer** across
+domains better than syntactic-motif operators.
+
+Run it: `python -m sciloop noether --domains arith,strings,vector`
+
+**Measured verdict (honest, and the whole point):**
+- **Conservation — confirmed.** On arith, CNE discovers `Q = reach − openness`
+  with a conservation score ~130–170 (nearly constant on solved traces, wild on
+  random walks). Its symmetry generators are automatically the **group inverses**
+  (`add1+sub1`, `double+halve`) — an interpretable, correct rediscovery.
+- **Transfer hypothesis — FALSIFIED here.** Those symmetries are inverse
+  *identities*, so they don't speed search and don't transfer (≈0 everywhere),
+  while syntactic macros still help only within-family. The headline claim did
+  not survive contact with evidence — recorded, not hidden.
+- **Difficulty prediction — confirmed.** The step where `Q` first *breaks* its
+  band predicts effort: Spearman(Q-break depth, log effort) ≈ **−0.66 (arith)**
+  and **+0.44 … +0.99 (vector)** across seed counts — comparable to the strongest
+  known trace-difficulty signal (first-conflict depth). One mechanism yielded a
+  real difficulty observable even though its operator-transfer claim failed.
+
+This is the intended behaviour: a genuinely novel, falsifiable method, built and
+then *measured* — delivering one confirmed prediction, one interpretable
+discovery, and one clean negative result.
+
 ## What is a hypothesis, not a guarantee
 Whether execution geometry contains *transferable* invariants, and whether
 evolving the grammar beats existing abstraction-learning methods, are open

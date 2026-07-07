@@ -202,6 +202,30 @@ def run(question: str, panel_names: list[str] | None = None, cycles: int = 2,
         _p(printer, f"  reduction: {gr['expanded_reduction']} nodes/task on held-out tasks")
         _p(printer, f"  certified + promoted operators: {added or '(none)'}")
 
+        # Computational Noether Engine — conserved quantity + symmetry operators.
+        _p(printer, "\n== COMPUTATIONAL NOETHER ENGINE ==")
+        try:
+            from . import noether
+            cne = noether.run_cne(run_icgg_domain, seeds=3)
+            q = cne["conserved_quantity"]
+            _p(printer, f"  conserved Q = {q['expression']} "
+                        f"(score {q['conservation_score']}, pos_drift {q['pos_drift']})")
+            eid2 = store.add_evidence(run_id, "executed_result",
+                                      json.dumps({k: v for k, v in cne.items() if k != '_Q'})[:8000],
+                                      source_ref=f"noether:{run_icgg_domain}")
+            sym_added = ecology.register_certified(
+                store, run_icgg_domain, cne["certified_symmetry_operators"], evidence_id=eid2)
+            for c in cne["certified_symmetry_operators"]:
+                nm = "sym_" + "_".join(c["sequence"])
+                if not genome.has(nm):
+                    genome.add_record("symmetry_operator", nm,
+                                      recipe={"domain": run_icgg_domain, "sequence": c["sequence"],
+                                              "conserved_quantity": q["expression"]},
+                                      provenance=[eid2], notes="Noether symmetry, certified")
+            _p(printer, f"  certified symmetry operators: {sym_added or '(none — symmetries were trivial here)'}")
+        except Exception as e:
+            _p(printer, f"  (CNE skipped: {str(e)[:120]})")
+
     store.finish_run(run_id, status="done")
     result = {"run_id": run_id, "compiled": compiled, "cycles": report_cycles,
               "icgg": icgg_summary,
