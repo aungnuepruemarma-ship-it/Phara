@@ -127,6 +127,41 @@ Run it: `python -m sciloop ricci --domains arith,strings,vector`
   domains whose graphs contain cycles/triangles. That is the concrete,
   falsifiable next step this experiment earned.
 
+## The Adjoint Engine (`adjoint.py`) — the one that transferred
+
+Thesis: every AI leap corresponds to making the *adjoint* of a computational
+structure learnable (deep learning = the adjoint of composition, i.e. backprop).
+Forward operators (state→state) are welded to their domain's symbols — measured
+here three ways at **0.0 cross-domain transfer**. CO-operators (goal→subgoals:
+waypoint-split, coordinate-peel, goal-regression) are expressed over the shared
+*structure of specifications*, so a decomposition POLICY learned on one domain
+should run unchanged on all of them.
+
+Run it: `python -m sciloop adjoint --domains arith,strings,vector`
+
+**Measured verdict — the thesis's prediction survived decisively:**
+- All three domains independently *learn the same co-operator*:
+  `regress(R=6)` — pull the goal backward through operator preimages
+  (the mathematician's "work backwards from what you want").
+- **Transfer is total.** The policy learned on ANY one domain, applied
+  unchanged: arith 82.2/83.8 (−98%), strings 93.8/94.3 (−99%), vector
+  209.8/231.3 (−91%) nodes/task on held-out tasks, solve rate 1.0 — identical
+  on and off the diagonal. Forward macros: 0.0 off-diagonal on the same tasks.
+- **Learning matters (control):** a random goal-side policy is catastrophic on
+  arith (−5660 nodes/task — wrong waypoints create harder subgoals). It is the
+  *learned selection* of the co-operator that transfers, not decomposition per se.
+- Honest caveats: adapters expose goal structure (interpolation/preimages) as
+  domain knowledge — but the forward arm had the same ops; what was *learned*
+  (which schema, what depth) is the transferable object. These toy domains have
+  cheap deterministic preimages, so the *magnitude* here is friendly; the
+  asymmetry (goal-side ≫ action-side = 0) is the finding.
+
+**Integration:** the learned co-operator is promoted like any discovery —
+evidence row (`adjoint` run), ecology ledger entry (domain `goal-side`,
+fitness tracked), and a `co_operator` genome record. The runtime now learns on
+BOTH sides of the adjunction: ICGG grows the forward grammar within a domain;
+the Adjoint Engine grows the goal-decomposition repertoire across domains.
+
 ## What is a hypothesis, not a guarantee
 Whether execution geometry contains *transferable* invariants, and whether
 evolving the grammar beats existing abstraction-learning methods, are open

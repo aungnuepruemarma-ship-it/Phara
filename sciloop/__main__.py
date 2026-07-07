@@ -126,6 +126,57 @@ def cmd_noether(args):
                                 indent=2, default=str))
 
 
+def cmd_adjoint(args):
+    from . import adjoint, genome
+    doms = args.domains.split(",") if args.domains else ["arith", "strings", "vector"]
+
+    print("=== The Adjoint Engine — learning on the goal side ===")
+    print("Co-operators (goal decompositions) learned on ONE domain, applied UNCHANGED to all.\n")
+
+    r = adjoint.adjoint_experiment(doms, seeds=args.seeds)
+    print("base BFS mean expanded (test): " +
+          "  ".join(f"{d}={r['base_test'][d]['mean_expanded']:.1f}" for d in doms))
+    print("\nlearned goal-side policy per source domain:")
+    for d in doms:
+        print(f"  {d}: {r['learned_policies'][d]}")
+
+    print("\nGOAL-SIDE transfer (reduction in nodes/task; rows=learned-on, cols=applied-to):")
+    for src in doms:
+        row = "  ".join(f"{t}={r['goal_side'][src][t]['reduction']:>7.1f}"
+                        f"(sr={r['goal_side'][src][t]['solve_rate']})" for t in doms)
+        print(f"  {src:>8}: {row}")
+    print(f"\nrandom-policy control (mean reduction): {r['random_control']}")
+    print("\ncompare: forward ICGG macros transfer 0.0 off-diagonal (python -m sciloop transfer)")
+
+    # Integration with the runtime: promote learned co-operators into the
+    # evidence store, ecology ledger, and knowledge genome.
+    store = Store()
+    rid = store.create_run("adjoint-experiment: goal-side transfer", {"domains": doms})
+    eid = store.add_evidence(rid, "executed_result", json.dumps(r, default=str)[:18000],
+                             source_ref="adjoint")
+    for src in doms:
+        pol = r["learned_policies"][src]
+        if not pol:
+            continue
+        name = adjoint.policy_name(pol)
+        store.add_operator(name, "goal-side", [pol["schema"], str(pol["phi"]), str(pol["R"])],
+                           evidence_id=eid)
+        offdiag = [r["goal_side"][src][t]["reduction"] for t in doms if t != src]
+        win = all(v > 0 for v in offdiag) if offdiag else False
+        store.record_operator_use(name, win=win, cost=1.0)
+        if not genome.has(name):
+            genome.add_record("co_operator", name,
+                              recipe={"policy": pol, "learned_on": src},
+                              provenance=[eid],
+                              notes="goal-side decomposition policy; transfers cross-domain")
+    store.finish_run(rid, status="done")
+    store.close()
+    print(f"\npromoted co-operators recorded in ecology + genome (run {rid}).")
+
+    if args.json:
+        print("\n" + json.dumps(r, indent=2, default=str))
+
+
 def cmd_ricci(args):
     from . import ricci
     doms = args.domains.split(",") if args.domains else ["arith", "strings", "vector"]
@@ -232,6 +283,10 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("ricci"); s.add_argument("--domains", default="")
     s.add_argument("--seeds", type=int, default=3)
     s.add_argument("--json", action="store_true"); s.set_defaults(func=cmd_ricci)
+
+    s = sub.add_parser("adjoint"); s.add_argument("--domains", default="")
+    s.add_argument("--seeds", type=int, default=3)
+    s.add_argument("--json", action="store_true"); s.set_defaults(func=cmd_adjoint)
 
     s = sub.add_parser("evidence"); s.add_argument("action", nargs="?", default="ls",
                                                    choices=["ls", "show"])
