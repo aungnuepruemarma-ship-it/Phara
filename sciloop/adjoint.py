@@ -78,6 +78,17 @@ class GoalAdapter:
             return P if P not in (S, T) else None
         return None
 
+    def distance(self, S, T) -> float:
+        """Scale estimate of goal size — used by the ADAPTIVE policy to decide
+        when a subgoal is small enough to hand to plain search."""
+        if self.name == "arith":
+            return abs(T - S)
+        if self.name == "strings":
+            return (len(T) - len(S)) if T.startswith(S) else (len(T) + 1)
+        if self.name == "vector":
+            return abs(T[0] - S[0]) + abs(T[1] - S[1])
+        return 0.0
+
     def regress(self, T):
         """Pull the goal back one step: candidate (T', final_op_name) pairs."""
         if self.name == "arith":
@@ -124,6 +135,10 @@ def co_policies() -> List[dict]:
         pols.append({"schema": "peel", "phi": 0.0, "R": R})
     for R in (2, 4, 6):
         pols.append({"schema": "regress", "phi": 0.0, "R": R})
+    # v2: ADAPTIVE regression — recurse until the goal is smaller than leaf
+    # size R, instead of a fixed number of steps. Scale-free across goal sizes.
+    for R in (2, 4, 8):
+        pols.append({"schema": "regress_adaptive", "phi": 0.0, "R": R})
     return pols
 
 
@@ -150,9 +165,31 @@ def solve_with_policy(domain: Domain, adapter: GoalAdapter, S, T,
         spent += exp
         return ok, tr
 
+    def regress_adaptive(a, b, leaf_size: float) -> Optional[List[str]]:
+        """Greedily pull the goal backward until it is within leaf_size of the
+        start, then hand the small residual to plain search. Linear cost in
+        goal size (no branch backtracking), scale-free in R."""
+        suffix: List[str] = []
+        cur = b
+        for _ in range(256):
+            if adapter.distance(a, cur) <= leaf_size:
+                break
+            cands = adapter.regress(cur)
+            if not cands:
+                break
+            Tp, opname = cands[0]
+            suffix.append(opname)
+            cur = Tp
+        ok, tr = leaf(a, cur)
+        if not ok:
+            return None
+        return tr + list(reversed(suffix))
+
     def rec(a, b, depth) -> Optional[List[str]]:
         if a == b:
             return []
+        if policy["schema"] == "regress_adaptive":
+            return regress_adaptive(a, b, float(policy["R"]))
         if depth <= 0:
             ok, tr = leaf(a, b)
             return tr if ok else None
