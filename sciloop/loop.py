@@ -110,6 +110,14 @@ def run(question: str, panel_names: list[str] | None = None, cycles: int = 2,
     store = Store()
     panel = agents.resolve_panel(panel_names)
 
+    # Consult persistent memory BEFORE compiling — stand on prior runs.
+    from . import memory
+    priors = memory.recall(question, k=3)
+    if priors:
+        _p(printer, "\n== MEMORY RECALL (prior runs) ==")
+        for m in priors:
+            _p(printer, f"  [{m['relevance']}] ({m['kind']}) {m['text'][:110]}")
+
     _p(printer, "\n== PROBLEM COMPILER ==")
     compiled = compiler.compile_problem(question)
     run_id = store.create_run(question, compiled)
@@ -233,9 +241,16 @@ def run(question: str, panel_names: list[str] | None = None, cycles: int = 2,
         except Exception as e:
             _p(printer, f"  (CNE skipped: {str(e)[:120]})")
 
+    # Write what we learned back to persistent memory — next run stands here.
+    for c in report_cycles:
+        memory.remember(f"On '{question}': hypothesis '{c['hypothesis'][:120]}' -> "
+                        f"{c['verdict']} ({c['reason'][:80]})",
+                        kind="run_finding", tags=question[:60],
+                        source_ref=f"run:{run_id}")
+
     store.finish_run(run_id, status="done")
     result = {"run_id": run_id, "compiled": compiled, "cycles": report_cycles,
-              "icgg": icgg_summary,
+              "icgg": icgg_summary, "recalled_priors": len(priors),
               "hypotheses": store.hypotheses(run_id=run_id),
               "evidence_counts": _evidence_counts(store, run_id)}
     store.close()

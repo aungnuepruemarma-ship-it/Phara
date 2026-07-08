@@ -69,6 +69,30 @@ def _t_knowledge(args: dict) -> str:
     return "; ".join(f"[{r['kind']}] {r['name']}: {r.get('notes','')[:80]}" for r in hits[:5])
 
 
+def _t_search_papers(args: dict) -> str:
+    from . import sources
+    r = sources.search_all(str(args.get("query", "")), per_source=int(args.get("per_source", 3)))
+    if not r["results"]:
+        return f"no papers; source status: {r['status']}"
+    lines = [f"[{x['source']}] {x['title'][:80]} ({x.get('year')})" for x in r["results"][:6]]
+    return f"{r['count']} papers from {r['status']}:\n" + "\n".join(lines)
+
+
+def _t_recall(args: dict) -> str:
+    from . import memory
+    hits = memory.recall(str(args.get("query", "")), k=int(args.get("k", 4)))
+    if not hits:
+        return "no relevant memory"
+    return "\n".join(f"[{h['relevance']}] ({h['kind']}) {h['text'][:120]}" for h in hits)
+
+
+def _t_remember(args: dict) -> str:
+    from . import memory
+    mid = memory.remember(str(args.get("text", "")), kind=str(args.get("kind", "note")),
+                          tags=str(args.get("tags", "")))
+    return f"stored memory {mid}"
+
+
 TOOLS: Dict[str, Tuple[str, Callable[[dict], str]]] = {
     "live_fetch": ("fetch a real-time data series (source: weather|quakes|fx|wiki) "
                    "and return its cross-domain observables", _t_live_fetch),
@@ -80,6 +104,10 @@ TOOLS: Dict[str, Tuple[str, Callable[[dict], str]]] = {
                     "policy on it (args: seed, dim)", _t_forge_probe),
     "knowledge": ("search the engine's genome (earned skills/laws/concepts) "
                   "(args: query)", _t_knowledge),
+    "search_papers": ("search real research platforms (arXiv/Crossref/OpenAlex/"
+                      "S2/PubMed) via official APIs (args: query)", _t_search_papers),
+    "recall": ("recall relevant memories from past runs (args: query, k)", _t_recall),
+    "remember": ("store a finding in persistent memory (args: text, kind, tags)", _t_remember),
 }
 
 

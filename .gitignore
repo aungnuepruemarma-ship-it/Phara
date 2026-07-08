@@ -48,3 +48,6 @@ htmlcov/
 .pytest_cache/
 frontend/next.config.ts.bak
 sciloop_data/
+
+# never commit API keys
+**/keys.json

@@ -318,6 +318,57 @@ def cmd_tools(args):
     print(toolkit.catalog())
 
 
+def cmd_remember(args):
+    from . import memory
+    mid = memory.remember(args.text, kind=args.kind, tags=args.tags or "")
+    print(f"stored memory {mid}")
+
+
+def cmd_recall(args):
+    from . import memory
+    hits = memory.recall(args.query, k=args.k)
+    if not hits:
+        print("no relevant memory"); return
+    for h in hits:
+        print(f"  [{h['relevance']}] ({h['kind']}) {h['text'][:100]}"
+              + (f"  <{h['source_ref']}>" if h.get('source_ref') else ""))
+
+
+def cmd_search(args):
+    from . import genome, sources
+    r = sources.search_all(args.query, per_source=args.per_source)
+    print(f"query: {args.query}")
+    print("source status: " + "  ".join(f"{k}={v}" for k, v in r["status"].items()))
+    print(f"\n{r['count']} unique papers:")
+    for x in r["results"][:args.limit]:
+        print(f"  [{x['source']:16s}] {x['title'][:74]}  ({x.get('year')})")
+        if x.get("url"):
+            print(f"      {x['url'][:90]}")
+    store = Store()
+    rid = store.create_run(f"literature search: {args.query}", {})
+    for x in r["results"][:args.limit]:
+        store.add_evidence(rid, "retrieved_source", json.dumps(x)[:4000],
+                           source_ref=x.get("url") or x.get("doi") or x["source"])
+    store.finish_run(rid, status="done")
+    store.close()
+    if args.json:
+        print("\n" + json.dumps(r, indent=2, default=str))
+
+
+def cmd_sources(args):
+    from . import sources
+    print("Research platforms (official APIs; keys via env or sciloop_data/keys.json):\n")
+    for s in sources.configured_sources():
+        if s["ready"]:
+            enh = (" + enhanced by " + ",".join(s["enhanced_by"])) if s["enhanced_by"] else ""
+            print(f"  READY       {s['source']}{enh}")
+        else:
+            print(f"  needs keys  {s['source']}  <- set {', '.join(s['needs_keys'])}")
+    print("\nAdd keys: export CORE_API_KEY=... GOOGLE_API_KEY=... GOOGLE_CSE_ID=... "
+          "(or put them in sciloop_data/keys.json). Never commit keys.")
+    print("Note: we use official APIs only; we do not bypass CAPTCHAs or bot checks.")
+
+
 def cmd_forge(args):
     from . import genome, worldforge
     print("=== WORLD FORGE — machine-made universes attack the engine's knowledge ===\n")
@@ -471,6 +522,8 @@ def cmd_status(args):
     print(f"runs      : {runs}   hypotheses: {hyps}   evidence: {ev}")
     print(f"ecology   : {ecology.summary(store)}")
     print(f"genome    : {genome.summary()}")
+    from . import memory
+    print(f"memory    : {memory.summary()}")
     store.close()
 
 
@@ -528,6 +581,19 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(func=cmd_live)
 
     sub.add_parser("tools").set_defaults(func=cmd_tools)
+
+    s = sub.add_parser("remember"); s.add_argument("text")
+    s.add_argument("--kind", default="note"); s.add_argument("--tags", default="")
+    s.set_defaults(func=cmd_remember)
+
+    s = sub.add_parser("recall"); s.add_argument("query"); s.add_argument("--k", type=int, default=5)
+    s.set_defaults(func=cmd_recall)
+
+    s = sub.add_parser("search"); s.add_argument("query")
+    s.add_argument("--per-source", type=int, default=4); s.add_argument("--limit", type=int, default=10)
+    s.add_argument("--json", action="store_true"); s.set_defaults(func=cmd_search)
+
+    sub.add_parser("sources").set_defaults(func=cmd_sources)
 
     s = sub.add_parser("evidence"); s.add_argument("action", nargs="?", default="ls",
                                                    choices=["ls", "show"])
