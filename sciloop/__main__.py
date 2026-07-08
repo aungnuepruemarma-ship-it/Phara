@@ -273,6 +273,51 @@ def cmd_introspect(args):
     print(r["report"])
 
 
+def cmd_live(args):
+    from . import genome, livedata
+    print("=== LIVE DATA — real-time series as domains for cross-domain science ===\n")
+    store = Store()
+    rid = store.create_run("live-data", {})
+    store._live_run_id = rid
+    r = livedata.run_live(store=store)
+
+    print(f"fetched: {r['fetched']}   unavailable: {r['unavailable']}")
+    print("\n-- per-domain observables (SAME vector on every real domain) --")
+    for k, d in r["domains"].items():
+        print(f"  [{d['name']}] {json.dumps(d['observables'])}")
+        if d.get("persistence"):
+            p = d["persistence"]
+            print(f"      persistence test: hit_rate={p['hit_rate']} "
+                  f"(chance {p['chance']}, n={p['trials']})")
+        print(f"      evidence id: {d.get('evidence')}")
+
+    print("\n-- shared invariants across live domains --")
+    for s in r["shared_invariants"] or ["(none met the bar)"]:
+        print(f"  {s}")
+
+    print("\n-- cross-domain connections (correlation, honestly labeled) --")
+    for c in r["connections"] or [{"pair": "(none |rho|>=0.4)", "spearman": "", "caveat": ""}]:
+        print(f"  {c['pair']}  rho={c['spearman']}  {c.get('caveat','')}")
+
+    eid = store.add_evidence(rid, "executed_result", json.dumps(r, default=str)[:18000],
+                             source_ref="livedata:analysis")
+    if r["fetched"] and not genome.has("live_cross_domain"):
+        genome.add_record("finding", "live_cross_domain",
+                          recipe={"fetched": r["fetched"],
+                                  "shared_invariants": r["shared_invariants"],
+                                  "connections": r["connections"]},
+                          provenance=[eid], notes="real-time cross-domain analysis")
+    store.finish_run(rid, status="done")
+    store.close()
+    if args.json:
+        print("\n" + json.dumps(r, indent=2, default=str))
+
+
+def cmd_tools(args):
+    from . import toolkit
+    print(toolkit.catalog())
+
+
 def cmd_forge(args):
     from . import genome, worldforge
     print("=== WORLD FORGE — machine-made universes attack the engine's knowledge ===\n")
@@ -478,6 +523,11 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("laws"); s.add_argument("--worlds", type=int, default=14)
     s.add_argument("--seeds", type=int, default=2)
     s.add_argument("--json", action="store_true"); s.set_defaults(func=cmd_laws)
+
+    s = sub.add_parser("live"); s.add_argument("--json", action="store_true")
+    s.set_defaults(func=cmd_live)
+
+    sub.add_parser("tools").set_defaults(func=cmd_tools)
 
     s = sub.add_parser("evidence"); s.add_argument("action", nargs="?", default="ls",
                                                    choices=["ls", "show"])

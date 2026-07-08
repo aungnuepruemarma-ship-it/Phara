@@ -131,12 +131,19 @@ def run(question: str, panel_names: list[str] | None = None, cycles: int = 2,
         top = active[0]
         top_text = hyp_text[top]
 
-        # --- DEBATE (agent_claim evidence) ---
-        _p(printer, "\n-- DEBATE NETWORK --")
-        turns = agents.debate(question, top_text, panel, rounds=2)
+        # --- DEBATE (agent_claim evidence; tool outputs are executed_result) ---
+        _p(printer, "\n-- DEBATE NETWORK (tool-enabled) --")
+        turns = agents.debate(question, top_text, panel, rounds=2, use_tools=True)
         for t in turns:
             store.add_evidence(run_id, "agent_claim", t["content"],
                                source_ref=f"{t['agent']}:r{t['round']}", hypothesis_id=top)
+            if t.get("tool_call"):
+                tc = t["tool_call"]
+                store.add_evidence(run_id, "executed_result",
+                                   f"TOOL {tc['tool']} {json.dumps(tc['args'])}\n{tc['result']}",
+                                   source_ref=f"tool:{tc['tool']}", hypothesis_id=top)
+                _p(printer, f"[{t['title']} r{t['round']}] used TOOL {tc['tool']} -> "
+                            f"{tc['result'][:120]}")
             _p(printer, f"[{t['title']} r{t['round']}] {t['content'][:200]}")
 
         # --- EXECUTE (executed_result evidence w/ geometry) ---

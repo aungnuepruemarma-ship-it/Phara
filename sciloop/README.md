@@ -203,6 +203,33 @@ Commands: `concepts`, `evolve`, `introspect`, `forge`, `laws`.
   to a stored evidence id (mechanical check). No claim without provenance —
   the anti-hallucination rule applied to the system's statements about ITSELF.
 
+## Live data + tools, skills, agents (`livedata.py`, `toolkit.py`)
+
+**Live series piped in** (`python -m sciloop live`): four free real-time
+sources fetched with stdlib urllib — Open-Meteo temperature, USGS earthquakes,
+Frankfurter USD/EUR, Wikipedia pageviews. Every fetch lands in the evidence
+store as `retrieved_source` WITH its URL + timestamp (real-time data enters at
+the promotable tier; agent talk never does). The SAME observable vector
+(trend, volatility, lag-1 memory, coarse-grain stability R, tail span) is
+computed on every real domain; the report lists shared invariants, pairwise
+connections (rank correlation, explicitly labeled "NOT causal"), and a
+persistence predictability test against the 50% chance baseline. If a source
+is down it is reported UNAVAILABLE — never silently simulated. Verified run:
+all 4 sources fetched; FX showed trend 0.705 with lag-1 memory 0.864; the
+persistence tests honestly came out ~chance.
+
+**Tools, skills, agents** (`python -m sciloop tools`):
+- TOOLS the debate agents can actually CALL: `live_fetch`, `sandbox_run`,
+  `icgg_grow`, `forge_probe`, `knowledge` (genome search).
+- Protocol: an agent ends its reply with `TOOL: <name> {json}` -> the runtime
+  EXECUTES it, stores the output as `executed_result` evidence, and the agent
+  gives a grounded follow-up constrained to what the output supports. Talk is
+  cheap; tool output is evidence.
+- SKILLS are not hardcoded: the skill list IS the genome — the engine's earned
+  co-operators, certified macros, concepts, laws, frames.
+Requires the LLM key for agent tool use; every tool also works directly from
+the CLI without one.
+
 ## What is a hypothesis, not a guarantee
 Whether execution geometry contains *transferable* invariants, and whether
 evolving the grammar beats existing abstraction-learning methods, are open

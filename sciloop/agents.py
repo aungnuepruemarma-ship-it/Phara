@@ -82,7 +82,8 @@ def resolve_panel(names: list[str] | None) -> list[str]:
 
 
 def _run_agent(key: str, question: str, hypothesis: str,
-               peer_context: str = "", extra_instruction: str = "") -> dict:
+               peer_context: str = "", extra_instruction: str = "",
+               use_tools: bool = False) -> dict:
     spec = AGENTS[key]
     parts = [f"Research question: {question}"]
     if hypothesis:
@@ -91,6 +92,14 @@ def _run_agent(key: str, question: str, hypothesis: str,
         parts.append(f"What other experts said:\n{peer_context}")
     if extra_instruction:
         parts.append(extra_instruction)
+    if use_tools:
+        from . import toolkit
+        tool_lines = "\n".join(f"  {n}: {d}" for n, (d, _) in toolkit.TOOLS.items())
+        parts.append(
+            "You may ground your answer with ONE real tool call. Available tools:\n"
+            f"{tool_lines}\n"
+            'To use one, end your reply with a single line:  TOOL: <name> {"arg": "value"}\n'
+            "Only request a tool if its output would materially strengthen your point.")
     parts.append("Respond in 2-5 sentences. Be concrete and falsifiable.")
     user = "\n\n".join(parts)
 
@@ -99,16 +108,41 @@ def _run_agent(key: str, question: str, hypothesis: str,
         temperature=0.7,
     )
     if not text:
-        text = f"[{spec['title']} unavailable — no LLM configured]"
-    return {"agent": key, "title": spec["title"], "content": text.strip()}
+        return {"agent": key, "title": spec["title"],
+                "content": f"[{spec['title']} unavailable — no LLM configured]"}
+
+    turn = {"agent": key, "title": spec["title"], "content": text.strip()}
+
+    if use_tools:
+        from . import toolkit
+        req = toolkit.parse_tool_request(text)
+        if req:
+            name, args = req
+            result = toolkit.call(name, args)
+            turn["tool_call"] = {"tool": name, "args": args, "result": result[:800]}
+            # grounded follow-up: the agent revises with REAL output in hand
+            follow = llm.chat(
+                [{"role": "system", "content": spec["system"]},
+                 {"role": "user", "content":
+                  f"{user}\n\nYou called TOOL {name} and it ACTUALLY RETURNED:\n{result[:800]}\n\n"
+                  "Now give your final 2-4 sentence position grounded in that output. "
+                  "Do not claim anything the output does not support."}],
+                temperature=0.4,
+            )
+            if follow:
+                turn["content"] = follow.strip()
+    return turn
 
 
-def debate(question: str, hypothesis: str, panel: list[str], rounds: int = 2) -> list[dict]:
-    """Run the debate. Returns a flat list of turn dicts with a 'round' field."""
+def debate(question: str, hypothesis: str, panel: list[str], rounds: int = 2,
+           use_tools: bool = False) -> list[dict]:
+    """Run the debate. Returns a flat list of turn dicts with a 'round' field.
+    With use_tools=True, agents may ground round-1 positions with ONE real
+    tool call each (executed by the runtime; output attached to the turn)."""
     turns: list[dict] = []
 
-    # Round 1 — independent perspectives.
-    round1 = [_run_agent(k, question, hypothesis) for k in panel]
+    # Round 1 — independent perspectives (tool-grounded when enabled).
+    round1 = [_run_agent(k, question, hypothesis, use_tools=use_tools) for k in panel]
     for t in round1:
         t["round"] = 1
     turns.extend(round1)
