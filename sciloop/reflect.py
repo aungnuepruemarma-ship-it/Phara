@@ -63,36 +63,38 @@ def mine_meta_operators(meta_traces: List[dict]) -> List[dict]:
 
 
 def bias_from(meta_ops: List[dict]):
-    """Turn mined meta-operators into a biased mutation sampler (3x weight on
-    mutation kinds appearing in kept motifs / positive singles)."""
+    """Turn mined meta-operators into a biased schedule: 3x weight on favored
+    mutation kinds AND a modulated crossover rate (the fix: 'crossover' is a
+    reproduction choice, not a mutation kind, so it biases the rate)."""
     favored: set = set()
     for m in meta_ops:
         if "motif" in m:
             favored.update(m["motif"])
         if "singles" in m:
             favored.update(s["mutation"] for s in m["singles"] if s["mean_delta"] > 0)
+    crossover_rate = 0.5 if "crossover" in favored else 0.25
     favored &= set(evolution.MUTATIONS)
-    if not favored:
-        return None
-    weighted = list(evolution.MUTATIONS) + list(favored) * 2
+    if not favored and crossover_rate == 0.25:
+        return None, 0.25
+    weighted = (list(evolution.MUTATIONS) + list(favored) * 2) or list(evolution.MUTATIONS)
 
     def _bias(rng: random.Random) -> str:
         return rng.choice(weighted)
-    return _bias
+    return _bias, crossover_rate
 
 
 def g3_test(meta_ops: List[dict], seeds: int = 3, generations: int = 4,
             pop: int = 6) -> dict:
     """Paired comparison on FRESH rng seeds: biased schedule vs uniform."""
-    bias = bias_from(meta_ops)
-    if bias is None:
+    bias, xrate = bias_from(meta_ops)
+    if bias is None and xrate == 0.25:
         return {"verdict": "no meta-operator to test", "pairs": []}
     pairs = []
     for rs in (101, 202, 303):
         b = evolution.evolve(pop_size=pop, generations=generations, seeds=seeds,
-                             rng_seed=rs, bias=bias)
+                             rng_seed=rs, bias=bias, crossover_rate=xrate)
         u = evolution.evolve(pop_size=pop, generations=generations, seeds=seeds,
-                             rng_seed=rs, bias=None)
+                             rng_seed=rs, bias=None, crossover_rate=0.25)
         pairs.append({"rng_seed": rs,
                       "biased_final_best": b["history"][-1]["best"],
                       "uniform_final_best": u["history"][-1]["best"]})

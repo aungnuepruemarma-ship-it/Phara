@@ -43,12 +43,16 @@ def macro_pool(seeds: int = 3) -> Dict[str, List[List[str]]]:
 
 # ── frame construction ────────────────────────────────────────────────────────
 def default_frame() -> dict:
-    """The hand-built frame: ALL certified macros + the adjoint v2 policy."""
+    """The hand-built frame: ALL certified macros + ONE GLOBAL adjoint v2
+    policy. (The single global policy IS the designed artifact — evolved
+    frames may specialize a different policy per domain, a dimension the
+    designer never tuned.)"""
     pool = macro_pool()
+    g = _policy_index({"schema": "regress_adaptive", "phi": 0.0, "R": 2})
     return {
         "id": "hand_built",
         "macro_mask": {d: [1] * len(pool[d]) for d in DOMAINS},
-        "policy_idx": _policy_index({"schema": "regress_adaptive", "phi": 0.0, "R": 2}),
+        "policy_idx": {d: g for d in DOMAINS},
         "attends": ["branch", "openness", "reach"],
         "lineage": [],
     }
@@ -59,7 +63,7 @@ def random_frame(rng: random.Random, fid: str) -> dict:
     return {
         "id": fid,
         "macro_mask": {d: [rng.randint(0, 1) for _ in pool[d]] for d in DOMAINS},
-        "policy_idx": rng.randrange(len(co_policies())),
+        "policy_idx": {d: rng.randrange(len(co_policies())) for d in DOMAINS},
         "attends": ["branch", "openness", "reach"],
         "lineage": [],
     }
@@ -72,8 +76,10 @@ def _policy_index(policy: dict) -> int:
     return 0
 
 
-def frame_policy(frame: dict) -> dict:
-    return co_policies()[frame["policy_idx"] % len(co_policies())]
+def frame_policy(frame: dict, domain_name: str) -> dict:
+    idx = frame["policy_idx"]
+    i = idx[domain_name] if isinstance(idx, dict) else idx
+    return co_policies()[i % len(co_policies())]
 
 
 def frame_grammar(frame: dict, domain_name: str) -> Grammar:
@@ -86,10 +92,12 @@ def frame_grammar(frame: dict, domain_name: str) -> Grammar:
 
 
 def describe(frame: dict) -> str:
-    pol = frame_policy(frame)
+    pols = []
+    for d in DOMAINS:
+        p = frame_policy(frame, d)
+        pols.append(f"{d}:{p['schema']}(R={p['R']})")
     n_macros = sum(sum(m) for m in frame["macro_mask"].values())
-    return (f"policy={pol['schema']}(phi={pol['phi']},R={pol['R']}) "
-            f"macros={n_macros} attends={','.join(frame['attends'])}")
+    return f"policies[{' '.join(pols)}] macros={n_macros}"
 
 
 def fingerprint(frame: dict) -> str:
@@ -100,9 +108,9 @@ def fingerprint(frame: dict) -> str:
 def fitness(frame: dict, seeds: List[int], split: str = "train", n: int = 12) -> dict:
     """Per-domain score = solve_rate + 1/(1+ln(1+mean_expanded)). Overall =
     mean + 0.5*min (uniformity/transfer bonus)."""
-    pol = frame_policy(frame)
     per: Dict[str, float] = {}
     for name in DOMAINS:
+        pol = frame_policy(frame, name)
         dom, ad = get_domain(name), GoalAdapter(name)
         g = frame_grammar(frame, name)
         total, solved, count = 0, 0, 0

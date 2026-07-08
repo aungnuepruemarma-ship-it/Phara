@@ -139,6 +139,10 @@ def co_policies() -> List[dict]:
     # size R, instead of a fixed number of steps. Scale-free across goal sizes.
     for R in (2, 4, 8):
         pols.append({"schema": "regress_adaptive", "phi": 0.0, "R": R})
+    # v3: BIDIRECTIONAL — the literal adjoint of search: a forward value
+    # frontier meets a backward demand frontier (verified preimages). Metric-
+    # free, so it does not depend on any distance function being 'right'.
+    pols.append({"schema": "bidir", "phi": 0.0, "R": 0})
     return pols
 
 
@@ -167,18 +171,25 @@ def solve_with_policy(domain: Domain, adapter: GoalAdapter, S, T,
         return ok, tr
 
     def regress_adaptive(a, b, leaf_size: float) -> Optional[List[str]]:
-        """Greedily pull the goal backward until it is within leaf_size of the
-        start, then hand the small residual to plain search. Linear cost in
-        goal size (no branch backtracking), scale-free in R."""
+        """Pull the goal backward until it is within leaf_size of the start,
+        then hand the small residual to plain search. BEST-preimage descent:
+        at each step choose the candidate that most reduces distance-to-start
+        (still domain-blind — uses only the adapter), with a cycle guard so
+        non-monotone inverses (swaps/reflections) cannot trap it."""
         suffix: List[str] = []
         cur = b
+        seen = {b}
         for _ in range(256):
-            if adapter.distance(a, cur) <= leaf_size:
+            d_cur = adapter.distance(a, cur)
+            if d_cur <= leaf_size:
                 break
-            cands = adapter.regress(cur)
+            cands = [(Tp, op) for Tp, op in adapter.regress(cur) if Tp not in seen]
             if not cands:
                 break
-            Tp, opname = cands[0]
+            Tp, opname = min(cands, key=lambda c: adapter.distance(a, c[0]))
+            if adapter.distance(a, Tp) >= d_cur:
+                break  # no preimage makes progress -> stop regressing here
+            seen.add(Tp)
             suffix.append(opname)
             cur = Tp
         ok, tr = leaf(a, cur)
@@ -186,9 +197,69 @@ def solve_with_policy(domain: Domain, adapter: GoalAdapter, S, T,
             return None
         return tr + list(reversed(suffix))
 
+    def bidir(a, b) -> Optional[List[str]]:
+        """Forward BFS from a meets backward BFS (verified preimages) from b.
+        Every popped node on either side counts toward expanded."""
+        nonlocal spent
+        from collections import deque
+        fwd_par = {a: None}          # state -> (prev_state, op)
+        bwd_par = {b: None}          # state -> (next_state, op)  [edge state --op--> next]
+        fq, bq = deque([a]), deque([b])
+        meet = a if a in bwd_par else None
+        budget = _MAX_EXPANDED
+        while fq and bq and spent < budget and meet is None:
+            # expand the smaller frontier
+            if len(fq) <= len(bq):
+                for _ in range(len(fq)):
+                    x = fq.popleft()
+                    spent += 1
+                    for opname, y in g.next_states(x):
+                        if y in fwd_par:
+                            continue
+                        fwd_par[y] = (x, opname)
+                        if y in bwd_par:
+                            meet = y
+                            break
+                        fq.append(y)
+                    if meet is not None:
+                        break
+            else:
+                for _ in range(len(bq)):
+                    x = bq.popleft()
+                    spent += 1
+                    for (Tp, opname) in adapter.regress(x):
+                        if Tp in bwd_par:
+                            continue
+                        bwd_par[Tp] = (x, opname)
+                        if Tp in fwd_par:
+                            meet = Tp
+                            break
+                        bq.append(Tp)
+                    if meet is not None:
+                        break
+        if meet is None:
+            return None
+        # reconstruct: forward ops a..meet, then backward ops meet..b
+        fops: List[str] = []
+        cur = meet
+        while fwd_par[cur] is not None:
+            prev, op = fwd_par[cur]
+            fops.append(op)
+            cur = prev
+        fops.reverse()
+        bops: List[str] = []
+        cur = meet
+        while bwd_par[cur] is not None:
+            nxt, op = bwd_par[cur]
+            bops.append(op)
+            cur = nxt
+        return fops + bops
+
     def rec(a, b, depth) -> Optional[List[str]]:
         if a == b:
             return []
+        if policy["schema"] == "bidir":
+            return bidir(a, b)
         if policy["schema"] == "regress_adaptive":
             return regress_adaptive(a, b, float(policy["R"]))
         if depth <= 0:

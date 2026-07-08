@@ -273,6 +273,83 @@ def cmd_introspect(args):
     print(r["report"])
 
 
+def cmd_forge(args):
+    from . import genome, worldforge
+    print("=== WORLD FORGE — machine-made universes attack the engine's knowledge ===\n")
+    print("-- G5 UNIVERSALITY: transferred co-policy on never-seen forged worlds --")
+    u = worldforge.universality(n_worlds=args.worlds, seeds=args.seeds)
+    for row in u["rows"][:6]:
+        print(f"  {row['world']:26s} inv={row['frac_invertible']:.2f} "
+              f"base={row['base_expanded']:>8.1f} policy={row['policy_expanded']:>7.1f} "
+              f"sr={row['policy_sr']:.2f} {'WIN' if row['win'] else 'loss'}")
+    if len(u["rows"]) > 6:
+        print(f"  ... ({len(u['rows'])-6} more worlds)")
+    print(f"  win rate: {u['wins']}/{u['n_worlds']} = {u['win_rate']}")
+    print(f"  G5 universality: {'PASS' if u['g5_universality_pass'] else 'FAIL'}")
+
+    print("\n-- ADVERSARIAL TURN: the world that hurts the policy most --")
+    a = worldforge.adversarial(n_probe=args.worlds, seeds=args.seeds)
+    print(f"  worst world: {a['worst_world']} (invertible fraction {a['frac_invertible']})")
+    print(f"  stats: {a['stats']}")
+    print(f"  counterexample found: {a['counterexample_found']}")
+    sr = a["self_repair"]
+    print(f"  SELF-REPAIR at impasse: policy={sr.get('policy')}")
+    if sr.get("after"):
+        print(f"    after: {sr['after']}   repaired: {sr['repaired']}")
+
+    # If the engine repaired itself with a NEW method, re-test universality
+    # with the engine-invented fix (stuck -> invent -> generalize, closed loop).
+    u2 = None
+    if sr.get("repaired") and sr.get("policy"):
+        print("\n-- POST-REPAIR UNIVERSALITY: the engine's self-invented method, all worlds --")
+        u2 = worldforge.universality(n_worlds=args.worlds, seeds=args.seeds,
+                                     policy=sr["policy"])
+        print(f"  win rate: {u2['wins']}/{u2['n_worlds']} = {u2['win_rate']}")
+        print(f"  G5 (post-repair): {'PASS' if u2['g5_universality_pass'] else 'FAIL'}")
+
+    store = Store()
+    rid = store.create_run("world-forge", {})
+    eid = store.add_evidence(rid, "executed_result",
+                             json.dumps({"universality": u, "adversarial": a,
+                                         "post_repair": u2}, default=str)[:18000],
+                             source_ref="worldforge")
+    if not genome.has("forge_universality"):
+        genome.add_record("finding", "forge_universality",
+                          recipe={"win_rate": u["win_rate"], "g5": u["g5_universality_pass"],
+                                  "post_repair_win_rate": (u2 or {}).get("win_rate")},
+                          provenance=[eid],
+                          notes=f"transferred policy {u['wins']}/{u['n_worlds']}; "
+                                f"self-invented fix {(u2 or {}).get('wins','-')}/{u['n_worlds']}")
+    store.finish_run(rid, status="done")
+    store.close()
+    if args.json:
+        print("\n" + json.dumps({"universality": u, "adversarial": a}, indent=2, default=str))
+
+
+def cmd_laws(args):
+    from . import genome, worldforge
+    print("=== LAWMAKER — laws of reasoning across self-made universes ===\n")
+    r = worldforge.lawmaker(n_train_worlds=args.worlds, seeds=args.seeds)
+    print(f"  candidate law : {r['law']}")
+    print(f"  fitted on     : {r['n_train_worlds']} worlds, {r['train_band']}  "
+          f"rho_train={r['rho_train']}")
+    print(f"  extrapolation : {r['n_extra_worlds']} worlds, {r['extrapolation_band']}  "
+          f"rho_extra={r['rho_extrapolation']}")
+    print(f"  G6 verdict    : {r['verdict']}")
+
+    store = Store()
+    rid = store.create_run("lawmaker", {})
+    eid = store.add_evidence(rid, "executed_result", json.dumps(r)[:8000],
+                             source_ref="lawmaker")
+    if not genome.has("law_invertibility_advantage"):
+        genome.add_record("law", "law_invertibility_advantage",
+                          recipe=r, provenance=[eid], notes=r["verdict"])
+    store.finish_run(rid, status="done")
+    store.close()
+    if args.json:
+        print("\n" + json.dumps(r, indent=2))
+
+
 def cmd_ricci(args):
     from . import ricci
     doms = args.domains.split(",") if args.domains else ["arith", "strings", "vector"]
@@ -393,6 +470,14 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--json", action="store_true"); s.set_defaults(func=cmd_evolve)
 
     sub.add_parser("introspect").set_defaults(func=cmd_introspect)
+
+    s = sub.add_parser("forge"); s.add_argument("--worlds", type=int, default=16)
+    s.add_argument("--seeds", type=int, default=2)
+    s.add_argument("--json", action="store_true"); s.set_defaults(func=cmd_forge)
+
+    s = sub.add_parser("laws"); s.add_argument("--worlds", type=int, default=14)
+    s.add_argument("--seeds", type=int, default=2)
+    s.add_argument("--json", action="store_true"); s.set_defaults(func=cmd_laws)
 
     s = sub.add_parser("evidence"); s.add_argument("action", nargs="?", default="ls",
                                                    choices=["ls", "show"])

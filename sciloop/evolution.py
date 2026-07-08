@@ -17,36 +17,46 @@ from typing import Callable, List
 from . import frames
 from .adjoint import co_policies
 
-MUTATIONS = ["flip_macro", "swap_policy", "tweak_policy"]
+MUTATIONS = ["flip_macro", "swap_policy", "swap_policy_domain", "tweak_policy"]
 
 
 def _mutate(frame: dict, rng: random.Random,
             bias: Callable[[random.Random], str] | None = None) -> tuple[dict, str]:
+    pol = frame["policy_idx"]
+    pol = dict(pol) if isinstance(pol, dict) else {d: pol for d in frames.DOMAINS}
     child = {
         "id": f"f{rng.randrange(10**6)}",
         "macro_mask": {d: list(m) for d, m in frame["macro_mask"].items()},
-        "policy_idx": frame["policy_idx"],
+        "policy_idx": pol,
         "attends": list(frame["attends"]),
         "lineage": frame["lineage"][-3:] + [frame["id"]],
     }
     kind = bias(rng) if bias else rng.choice(MUTATIONS)
+    n_pol = len(co_policies())
     if kind == "flip_macro":
         d = rng.choice(frames.DOMAINS)
         if child["macro_mask"][d]:
             i = rng.randrange(len(child["macro_mask"][d]))
             child["macro_mask"][d][i] ^= 1
-    elif kind == "swap_policy":
-        child["policy_idx"] = rng.randrange(len(co_policies()))
+    elif kind == "swap_policy":  # global move: one policy for all domains
+        g = rng.randrange(n_pol)
+        child["policy_idx"] = {d: g for d in frames.DOMAINS}
+    elif kind == "swap_policy_domain":  # specialize ONE domain's policy
+        d = rng.choice(frames.DOMAINS)
+        child["policy_idx"][d] = rng.randrange(n_pol)
     elif kind == "tweak_policy":
-        child["policy_idx"] = (child["policy_idx"] + rng.choice((-1, 1))) % len(co_policies())
+        d = rng.choice(frames.DOMAINS)
+        child["policy_idx"][d] = (child["policy_idx"][d] + rng.choice((-1, 1))) % n_pol
     return child, kind
 
 
 def _crossover(a: dict, b: dict, rng: random.Random) -> dict:
+    bp = b["policy_idx"]
+    bp = dict(bp) if isinstance(bp, dict) else {d: bp for d in frames.DOMAINS}
     return {
         "id": f"x{rng.randrange(10**6)}",
         "macro_mask": {d: list(a["macro_mask"][d]) for d in frames.DOMAINS},
-        "policy_idx": b["policy_idx"],
+        "policy_idx": dict(bp),
         "attends": list(a["attends"]),
         "lineage": [a["id"], b["id"]],
     }
@@ -54,7 +64,7 @@ def _crossover(a: dict, b: dict, rng: random.Random) -> dict:
 
 def evolve(pop_size: int = 8, generations: int = 6, seeds: int = 3,
            rng_seed: int = 1, bias: Callable[[random.Random], str] | None = None,
-           printer=None) -> dict:
+           crossover_rate: float = 0.25, printer=None) -> dict:
     def _p(msg):
         if printer:
             printer(msg)
@@ -88,7 +98,7 @@ def evolve(pop_size: int = 8, generations: int = 6, seeds: int = 3,
                 cands = rng.sample(scored, min(3, len(scored)))
                 return max(cands, key=lambda t: t[1])
             pa, fa = pick()
-            if rng.random() < 0.25:
+            if rng.random() < crossover_rate:
                 pb, _ = pick()
                 child = _crossover(pa, pb, rng)
                 kind = "crossover"

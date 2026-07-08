@@ -162,6 +162,47 @@ fitness tracked), and a `co_operator` genome record. The runtime now learns on
 BOTH sides of the adjunction: ICGG grows the forward grammar within a domain;
 the Adjoint Engine grows the goal-decomposition repertoire across domains.
 
+## AUTOGNOSIS + the World Forge + the Lawmaker — the full ladder, measured
+
+The ladder: operators → methods → concepts → minds → meta-rules → worlds →
+laws. Knowledge at each rung = what survives change of the rung below.
+Commands: `concepts`, `evolve`, `introspect`, `forge`, `laws`.
+
+**All gate verdicts (nothing hidden):**
+- **G1 concept tower — PASS.** 4 diverse concepts admitted (312 candidates
+  failed the earned-admission tests; 71 more rejected as synonyms); level-2
+  concept `C1 AND C2` (|rho|=0.862) out-predicts its parents (0.806) and the
+  best native observable (0.822). The engine coined a better term than it was
+  given.
+- **G2 evolution vs design — CONVERGENT TIE (twice).** Even after widening the
+  gene space (per-domain policies + the bidirectional schema), evolution from
+  random minds converges to exactly the hand-built frame on human-domain
+  fitness. The designed mind is the measured optimum of ITS worlds — and the
+  Forge shows other worlds have other winners, so a forged-world curriculum is
+  the earned next step.
+- **G3 meta-acceleration — honest negative.** Near convergence every mutation
+  kind has negative mean fitness delta; there is no positive meta-rule to arm.
+  (The mined table itself — crossover least harmful, policy-swaps worst — IS
+  the engine's self-knowledge; it just can't accelerate an already-converged
+  search.)
+- **G5 universality — FAILED, then the loop closed.** The Forge synthesized
+  16 machine-made operator algebras: the human-domain-learned policy won only
+  5/16 (designer bias exposed — exactly what the Forge exists to find). The
+  adversarial turn found a world where it was 4.4x WORSE than plain search
+  (advantage 0.23). Then **self-repair at the impasse**: the engine selected a
+  new method on its own — bidirectional meet-in-the-middle via verified
+  preimages (the literal adjoint of search: forward values meeting backward
+  demands) — repairing the counterexample (0.23 → 1.96) and generalizing
+  across worlds (5/16 → 11/16 = 0.69, one world short of the 0.70 gate).
+  Stuck → invent → generalize, autonomously.
+- **G6 law extrapolation — honest negative.** The candidate law ("regression
+  advantage grows with invertible-op fraction") fit weakly in-range
+  (rho −0.19) and did not survive extrapolation (rho 0.15): verdict
+  *curve-fit, not law*. The system refused to promote a false law.
+- **G4 grounded introspection — PASS.** The self-report resolves every claim
+  to a stored evidence id (mechanical check). No claim without provenance —
+  the anti-hallucination rule applied to the system's statements about ITSELF.
+
 ## What is a hypothesis, not a guarantee
 Whether execution geometry contains *transferable* invariants, and whether
 evolving the grammar beats existing abstraction-learning methods, are open
