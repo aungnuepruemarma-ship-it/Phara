@@ -153,9 +153,10 @@ def _bfs(engine: SearchEngine, S, T):
 
 
 def solve_with_policy(domain: Domain, adapter: GoalAdapter, S, T,
-                      policy: dict) -> Tuple[bool, int, List[str]]:
-    """Returns (success, total_expanded, verified op trace)."""
-    g = domain.base_grammar()
+                      policy: dict, grammar: Grammar | None = None) -> Tuple[bool, int, List[str]]:
+    """Returns (success, total_expanded, verified op trace). An evolved frame
+    may supply its own grammar (base + chosen certified macros)."""
+    g = grammar if grammar is not None else domain.base_grammar()
     engine = SearchEngine(g, max_depth=_MAX_DEPTH, max_expanded=_MAX_EXPANDED)
     spent = 0
 

@@ -177,6 +177,102 @@ def cmd_adjoint(args):
         print("\n" + json.dumps(r, indent=2, default=str))
 
 
+def cmd_concepts(args):
+    from . import concepts, genome
+    print("=== Concept invention (a concept must earn its name) ===\n")
+    rep = concepts.invent(seeds=args.seeds)
+    print(f"baseline observable: {rep['baseline']['observable']} "
+          f"|rho|={rep['baseline']['abs_rho']}  (the bar to beat +0.10)\n")
+    print(f"ADMITTED ({len(rep['admitted'])}):")
+    for a in rep["admitted"]:
+        print(f"  {a['concept']}\n     why: {a['why']}")
+    for r in rep["rejected"]:
+        print(f"REJECTED: {r['note']}")
+    print(f"\nCONCEPT TOWER (level-2, must beat best parent) ({len(rep['tower'])}):")
+    for t in rep["tower"]:
+        print(f"  {t['concept']}  |rho|={t['abs_rho']} vs parent {t['parent_best']} "
+              f"(built from {t['built_from']})")
+    g1 = bool(rep["tower"])
+    print(f"\nG1 concept-tower gate: {'PASS' if g1 else 'FAIL (no level-2 concept survived)'}")
+
+    store = Store()
+    rid = store.create_run("concept-invention", {})
+    eid = store.add_evidence(rid, "executed_result", json.dumps(rep)[:18000],
+                             source_ref="concepts")
+    for a in rep["admitted"][:6]:
+        nm = a["concept"].split(":")[0]
+        if not genome.has(nm):
+            genome.add_record("concept", nm, recipe={"definition": a["concept"]},
+                              provenance=[eid], notes=a["why"])
+    for t in rep["tower"][:3]:
+        nm = t["concept"].replace(" ", "")
+        if not genome.has(nm):
+            genome.add_record("concept", nm,
+                              recipe={"definition": t["concept"], "level": 2,
+                                      "built_from": t["built_from"]},
+                              provenance=[eid], notes=f"level-2; |rho|={t['abs_rho']}")
+    store.finish_run(rid, status="done")
+    store.close()
+    if args.json:
+        print("\n" + json.dumps(rep, indent=2, default=str))
+
+
+def cmd_evolve(args):
+    from . import evolution, genome, reflect
+    print("=== Structural evolution of Frames (minds), train-split selection ===\n")
+    res = evolution.evolve(pop_size=args.pop, generations=args.generations,
+                           seeds=args.seeds, rng_seed=args.rng_seed,
+                           printer=lambda m: print(m, flush=True))
+    ev, hb = res["evolved_test_fitness"], res["hand_built_test_fitness"]
+    print(f"\nHELD-OUT verdict (G2):")
+    print(f"  evolved best : {ev['overall']}  per-domain {ev['per_domain']}")
+    print(f"  hand-built   : {hb['overall']}  per-domain {hb['per_domain']}")
+    print(f"  evolution beats design: {res['evolution_beats_design']}")
+    print(f"  evolved frame: {res['best_desc']}")
+
+    print("\n=== Self-reflection: mining rules about how minds improve ===")
+    metas = reflect.mine_meta_operators(res["meta_traces"])
+    for m in metas:
+        print(f"  {m}")
+
+    print("\n=== G3: does meta-knowledge accelerate future evolution? ===")
+    g3 = reflect.g3_test(metas, seeds=args.seeds, generations=3, pop=6)
+    for p in g3.get("pairs", []):
+        print(f"  seed {p['rng_seed']}: biased={p['biased_final_best']} "
+              f"uniform={p['uniform_final_best']}")
+    print(f"  verdict: {g3['verdict']}")
+
+    store = Store()
+    rid = store.create_run("structural-evolution", {})
+    eid = store.add_evidence(rid, "executed_result",
+                             json.dumps({k: v for k, v in res.items() if k != 'meta_traces'},
+                                        default=str)[:18000],
+                             source_ref="evolution")
+    eid3 = store.add_evidence(rid, "executed_result", json.dumps(g3, default=str)[:8000],
+                              source_ref="reflect:g3")
+    if not genome.has("best_evolved_frame"):
+        genome.add_record("frame", "best_evolved_frame",
+                          recipe={"frame": res["best_frame"], "desc": res["best_desc"]},
+                          provenance=[eid],
+                          notes=f"G2 beats design: {res['evolution_beats_design']}")
+    for i, m in enumerate([m for m in metas if "motif" in m][:3]):
+        nm = "meta_" + "_".join(m["motif"])
+        if not genome.has(nm):
+            genome.add_record("meta_operator", nm, recipe=m, provenance=[eid3],
+                              notes=f"g3: {g3['verdict']}")
+    store.finish_run(rid, status="done")
+    store.close()
+    if args.json:
+        print("\n" + json.dumps({"result": {k: v for k, v in res.items() if k != 'meta_traces'},
+                                 "g3": g3}, indent=2, default=str))
+
+
+def cmd_introspect(args):
+    from . import reflect
+    r = reflect.introspect()
+    print(r["report"])
+
+
 def cmd_ricci(args):
     from . import ricci
     doms = args.domains.split(",") if args.domains else ["arith", "strings", "vector"]
@@ -287,6 +383,16 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("adjoint"); s.add_argument("--domains", default="")
     s.add_argument("--seeds", type=int, default=3)
     s.add_argument("--json", action="store_true"); s.set_defaults(func=cmd_adjoint)
+
+    s = sub.add_parser("concepts"); s.add_argument("--seeds", type=int, default=3)
+    s.add_argument("--json", action="store_true"); s.set_defaults(func=cmd_concepts)
+
+    s = sub.add_parser("evolve"); s.add_argument("--generations", type=int, default=6)
+    s.add_argument("--pop", type=int, default=8); s.add_argument("--seeds", type=int, default=3)
+    s.add_argument("--rng-seed", type=int, default=1)
+    s.add_argument("--json", action="store_true"); s.set_defaults(func=cmd_evolve)
+
+    sub.add_parser("introspect").set_defaults(func=cmd_introspect)
 
     s = sub.add_parser("evidence"); s.add_argument("action", nargs="?", default="ls",
                                                    choices=["ls", "show"])
